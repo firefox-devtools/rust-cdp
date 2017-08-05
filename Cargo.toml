@@ -1,0 +1,22 @@
+[package]
+name = "cdp"
+version = "0.1.0"
+authors = ["Michael Smith <michael@spinda.net>"]
+build = "src/generate.rs"
+
+[dependencies]
+lazy_static = "0.2"
+regex = "0.2"
+serde = "1.0"
+serde_derive = { path = "../serde/serde_derive" }
+serde_json = "1.0"
+
+[build-dependencies]
+Inflector = "0.10"
+lazy_static = "0.2"
+quick-error = "1.2"
+quote = "0.3"
+regex = "0.2"
+serde = "1.0"
+serde_derive = { path = "../serde/serde_derive" }
+serde_json = "1.0"
