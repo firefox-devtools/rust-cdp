@@ -1,18 +1,17 @@
 #![recursion_limit="128"]
 
-extern crate regex;
-extern crate serde;
-extern crate serde_json;
-
 #[macro_use]
 extern crate lazy_static;
-
+extern crate regex;
+extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+extern crate serde_json;
 
 pub mod definition;
-pub mod http;
+#[macro_use]
 pub mod websocket;
+pub mod http;
 
 #[macro_export]
 macro_rules! cdp_default_port {

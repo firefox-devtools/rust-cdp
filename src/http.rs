@@ -334,11 +334,6 @@ impl<'de> Deserialize<'de> for Page {
 }
 
 #[macro_export]
-macro_rules! cdp_websocket_url_format {
-    () => ( "ws://{server_addr}/devtools/page/{page_id}" )
-}
-
-#[macro_export]
 macro_rules! cdp_frontend_url_format {
     () => ( "chrome-devtools://devtools/bundled/inspector.html?ws={server_addr}/devtools/page/{page_id}" )
 }
@@ -395,13 +390,8 @@ impl Display for PageType {
 }
 
 #[macro_export]
-macro_rules! cdp_http_unknown_command_response_format {
-    () => ( "Unknown command: {command}" )
-}
-
-#[macro_export]
 macro_rules! cdp_http_root_path {
-    () => ( "/json" )
+    () => ( "json" )
 }
 
 #[macro_export]
@@ -416,7 +406,7 @@ macro_rules! cdp_http_version_info_path {
 
 #[macro_export]
 macro_rules! cdp_http_version_info_url_format {
-    () => ( concat!("http://{server_addr}", cdp_http_version_info_path!()) )
+    () => ( concat!("http://{server_addr}/", cdp_http_version_info_path!()) )
 }
 
 #[macro_export]
@@ -431,7 +421,7 @@ macro_rules! cdp_http_page_list_path {
 
 #[macro_export]
 macro_rules! cdp_http_page_list_url_format {
-    () => ( concat!("http://{server_addr}", cdp_http_page_list_path!()) )
+    () => ( concat!("http://{server_addr}/", cdp_http_page_list_path!()) )
 }
 
 #[macro_export]
@@ -451,12 +441,12 @@ macro_rules! cdp_http_new_page_and_navigate_path_format {
 
 #[macro_export]
 macro_rules! cdp_http_new_page_url_format {
-    () => ( concat!("http://{server_addr}", cdp_http_new_page_path!()) )
+    () => ( concat!("http://{server_addr}/", cdp_http_new_page_path!()) )
 }
 
 #[macro_export]
 macro_rules! cdp_http_new_page_and_navigate_url_format {
-    () => ( concat!("http://{server_addr}", cdp_http_new_page_and_navigate_path_format!()) )
+    () => ( concat!("http://{server_addr}/", cdp_http_new_page_and_navigate_path_format!()) )
 }
 
 #[macro_export]
@@ -476,17 +466,7 @@ macro_rules! cdp_http_activate_page_path_format {
 
 #[macro_export]
 macro_rules! cdp_http_activate_page_url_format {
-    () => ( concat!("http://{server_addr}", cdp_http_activate_page_path_format!()) )
-}
-
-#[macro_export]
-macro_rules! cdp_http_activate_page_success_response {
-    () => ( "Target activated" )
-}
-
-#[macro_export]
-macro_rules! cdp_http_activate_page_not_found_response_format {
-    () => ( "No such target id: {page_id}" )
+    () => ( concat!("http://{server_addr}/", cdp_http_activate_page_path_format!()) )
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -495,35 +475,131 @@ pub enum HttpCommand<'a> {
     PageList,
     NewPage(Option<&'a str>),
     ActivatePage(&'a str),
-    Unknown(&'a str),
+}
+
+impl<'a> From<&'a OwnedHttpCommand> for HttpCommand<'a> {
+    fn from(message: &'a OwnedHttpCommand) -> Self {
+        match *message {
+            OwnedHttpCommand::VersionInfo => HttpCommand::VersionInfo,
+            OwnedHttpCommand::PageList => HttpCommand::PageList,
+            OwnedHttpCommand::NewPage(ref maybe_url) => {
+                HttpCommand::NewPage(maybe_url.as_ref().map(|x| x.as_str()))
+            }
+            OwnedHttpCommand::ActivatePage(ref page_id) => HttpCommand::ActivatePage(page_id),
+        }
+    }
 }
 
 impl<'a> HttpCommand<'a> {
     pub fn parse(path: &'a str, query: Option<&'a str>) -> Option<Self> {
         lazy_static! {
-            static ref COMMAND_PATH_RE: Regex = Regex::new(
-                concat!(r"^", cdp_http_root_path!(), r"(/([^/]*))?(/(.*))?$"))
-                .expect("cdp: COMMAND_PATH_RE compilation failed");
+            static ref HTTP_PATH_RE: Regex =
+                Regex::new(concat!(r"^", cdp_http_root_path!(), r"(/([^/]*))?(/(.*))?$"))
+                    .expect("cdp: HTTP_PATH_RE compilation failed");
         }
 
-        COMMAND_PATH_RE.captures(path).map(move |captures| {
+        HTTP_PATH_RE.captures(path).and_then(move |captures| {
             match captures.get(2) {
-                None => HttpCommand::PageList,
+                None => Some(HttpCommand::PageList),
                 Some(command) => {
                     match command.as_str() {
-                        cdp_http_version_info_slug!() => HttpCommand::VersionInfo,
-                        cdp_http_page_list_slug!() => HttpCommand::PageList,
-                        cdp_http_new_page_slug!() => HttpCommand::NewPage(query),
+                        cdp_http_version_info_slug!() => Some(HttpCommand::VersionInfo),
+                        cdp_http_page_list_slug!() => Some(HttpCommand::PageList),
+                        cdp_http_new_page_slug!() => Some(HttpCommand::NewPage(query)),
                         cdp_http_activate_page_slug!() => {
-                            HttpCommand::ActivatePage(match captures.get(4) {
+                            Some(HttpCommand::ActivatePage(match captures.get(4) {
                                 None => "",
                                 Some(url) => url.as_str(),
-                            })
+                            }))
                         }
-                        command => HttpCommand::Unknown(command),
+                        _ => None,
                     }
                 }
             }
         })
+    }
+
+    pub fn parse_with_slash(path: &'a str, query: Option<&'a str>) -> Option<Self> {
+        if let Some('/') = path.chars().next() {
+            HttpCommand::parse(&path[1..], query)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum OwnedHttpCommand {
+    VersionInfo,
+    PageList,
+    NewPage(Option<String>),
+    ActivatePage(String),
+}
+
+impl<'a, 'b> From<&'b HttpCommand<'a>> for OwnedHttpCommand {
+    fn from(message: &'b HttpCommand<'a>) -> Self {
+        match *message {
+            HttpCommand::VersionInfo => OwnedHttpCommand::VersionInfo,
+            HttpCommand::PageList => OwnedHttpCommand::PageList,
+            HttpCommand::NewPage(maybe_url) => OwnedHttpCommand::NewPage(maybe_url.map(Into::into)),
+            HttpCommand::ActivatePage(page_id) => OwnedHttpCommand::ActivatePage(page_id.into()),
+        }
+    }
+}
+
+impl<'a> From<HttpCommand<'a>> for OwnedHttpCommand {
+    fn from(message: HttpCommand<'a>) -> Self {
+        match message {
+            HttpCommand::VersionInfo => OwnedHttpCommand::VersionInfo,
+            HttpCommand::PageList => OwnedHttpCommand::PageList,
+            HttpCommand::NewPage(maybe_url) => OwnedHttpCommand::NewPage(maybe_url.map(Into::into)),
+            HttpCommand::ActivatePage(page_id) => OwnedHttpCommand::ActivatePage(page_id.into()),
+        }
+    }
+}
+
+impl OwnedHttpCommand {
+    pub fn parse<S1, S2>(path: S1, query: Option<S2>) -> Option<Self>
+        where S1: AsRef<str>,
+              S2: AsRef<str>
+    {
+        match query {
+            None => HttpCommand::parse(path.as_ref(), None).map(|x| x.into()),
+            Some(query) => {
+                HttpCommand::parse(path.as_ref(), Some(query.as_ref())).map(|x| x.into())
+            }
+        }
+    }
+
+    pub fn parse_with_slash<S1, S2>(path: S1, query: Option<S2>) -> Option<Self>
+        where S1: AsRef<str>,
+              S2: AsRef<str>
+    {
+        match query {
+            None => HttpCommand::parse_with_slash(path.as_ref(), None).map(|x| x.into()),
+            Some(query) => {
+                HttpCommand::parse_with_slash(path.as_ref(), Some(query.as_ref())).map(|x| x.into())
+            }
+        }
+    }
+}
+
+#[derive(Serialize, Clone, Debug, Eq, PartialEq)]
+#[serde(untagged)]
+pub enum HttpResponse {
+    VersionInfo(VersionInfo),
+    PageList(Vec<Page>),
+    NewPage(Page),
+    ActivatePage(bool),
+}
+
+impl HttpResponse {
+    pub fn status(&self) -> u16 {
+        match *self {
+            HttpResponse::VersionInfo(..) => 200,
+            HttpResponse::PageList(..) => 200,
+            HttpResponse::NewPage(..) => 200,
+            HttpResponse::ActivatePage(activated) => if activated { 200 } else { 404 },
+        }
     }
 }

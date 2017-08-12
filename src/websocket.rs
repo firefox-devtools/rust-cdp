@@ -1,5 +1,6 @@
 #![allow(deprecated)]
 
+use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{self, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
@@ -8,6 +9,40 @@ use std::fmt::{self, Display, Formatter};
 use std::mem;
 
 pub use serde_json::Value;
+
+#[macro_export]
+macro_rules! cdp_websocket_devtools_path {
+    () => ( "devtools/page")
+}
+
+#[macro_export]
+macro_rules! cdp_websocket_devtools_path_format {
+    () => ( concat!(cdp_websocket_devtools_path!(), "/{page_id}") )
+}
+
+#[macro_export]
+macro_rules! cdp_websocket_url_format {
+    () => ( concat!("ws://{server_addr}/", cdp_websocket_devtools_path_format!()) )
+}
+
+pub fn parse_websocket_path(path: &str) -> Option<&str> {
+    lazy_static! {
+        static ref WEBSOCKET_PATH_RE: Regex =
+            Regex::new(concat!(r"^", cdp_websocket_devtools_path!(), "/(.*)$"))
+                .expect("cdp: WEBSOCKET_PATH_RE compilation failed");
+    }
+
+    WEBSOCKET_PATH_RE.captures(path)
+        .map(|captures| captures.get(1).map(|m| m.as_str()).unwrap_or(""))
+}
+
+pub fn parse_websocket_path_with_slash(path: &str) -> Option<&str> {
+    if let Some('/') = path.chars().next() {
+        parse_websocket_path(&path[1..])
+    } else {
+        None
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[serde(empty_struct)]
@@ -64,8 +99,8 @@ impl OwnedClientMessage {
     pub fn parse_incoming<'de, D>(deserializer: D) -> Result<Self, (DevToolsError, Option<u64>)>
         where D: Deserializer<'de>
     {
-        let value = Value::deserialize(deserializer)
-            .map_err(|_| (DevToolsError::invalid_json(), None))?;
+        let value =
+            Value::deserialize(deserializer).map_err(|_| (DevToolsError::invalid_json(), None))?;
         let obj = value.as_object().ok_or_else(|| (DevToolsError::must_be_object(), None))?;
         let id = obj.get("id")
             .and_then(Value::as_u64)
@@ -82,6 +117,15 @@ impl OwnedClientMessage {
             id: id,
             command: command,
         })
+    }
+}
+
+impl<'a, 'b> From<&'b ClientMessage<'a>> for OwnedClientMessage {
+    fn from(message: &'b ClientMessage<'a>) -> Self {
+        OwnedClientMessage {
+            id: (*message).id,
+            command: (*message).command.clone(),
+        }
     }
 }
 
@@ -766,6 +810,23 @@ pub enum OwnedServerMessage<T = Value> {
     },
     Event(Event),
     Error(DevToolsError),
+}
+
+impl<'a, 'b, T> From<&'b ServerMessage<'a, T>> for OwnedServerMessage<T>
+    where T: Clone
+{
+    fn from(message: &'b ServerMessage<'a, T>) -> Self {
+        match *message {
+            ServerMessage::Response { id, result } => {
+                OwnedServerMessage::Response {
+                    id: id,
+                    result: result.map(Clone::clone).map_err(Clone::clone),
+                }
+            }
+            ServerMessage::Event(event) => OwnedServerMessage::Event(event.clone()),
+            ServerMessage::Error(error) => OwnedServerMessage::Error(error.clone()),
+        }
+    }
 }
 
 impl<'a, T> From<ServerMessage<'a, T>> for OwnedServerMessage<T>
