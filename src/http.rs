@@ -559,28 +559,12 @@ impl<'a> From<HttpCommand<'a>> for OwnedHttpCommand {
 }
 
 impl OwnedHttpCommand {
-    pub fn parse<S1, S2>(path: S1, query: Option<S2>) -> Option<Self>
-        where S1: AsRef<str>,
-              S2: AsRef<str>
-    {
-        match query {
-            None => HttpCommand::parse(path.as_ref(), None).map(|x| x.into()),
-            Some(query) => {
-                HttpCommand::parse(path.as_ref(), Some(query.as_ref())).map(|x| x.into())
-            }
-        }
+    pub fn parse(path: &str, query: Option<&str>) -> Option<Self> {
+        HttpCommand::parse(path, query).map(|x| x.into())
     }
 
-    pub fn parse_with_slash<S1, S2>(path: S1, query: Option<S2>) -> Option<Self>
-        where S1: AsRef<str>,
-              S2: AsRef<str>
-    {
-        match query {
-            None => HttpCommand::parse_with_slash(path.as_ref(), None).map(|x| x.into()),
-            Some(query) => {
-                HttpCommand::parse_with_slash(path.as_ref(), Some(query.as_ref())).map(|x| x.into())
-            }
-        }
+    pub fn parse_with_slash(path: &str, query: Option<&str>) -> Option<Self> {
+        HttpCommand::parse_with_slash(path, query).map(|x| x.into())
     }
 }
 
