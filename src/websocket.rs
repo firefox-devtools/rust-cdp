@@ -920,13 +920,13 @@ impl<'de, T> Deserialize<'de> for OwnedServerMessage<T>
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(untagged)]
 enum ServerMessageImpl<E, T1, T2> {
-    GeneralFailure { error: E },
     CommandSuccess {
         id: u64,
         #[serde(rename = "result")]
         response: T1,
     },
     CommandFailure { id: u64, error: E },
+    GeneralFailure { error: E },
     Event(T2),
 }
 
