@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# This Source Code Form is subject to the terms of the Mozilla Public License,
+# v. 2.0. If a copy of the MPL was not distributed with this file, You can
+# obtain one at http://mozilla.org/MPL/2.0/.
+
 set -eufo pipefail
 
 # The easiest way to determine the exact stable Chromium version, at least as
@@ -9,7 +13,12 @@ set -eufo pipefail
 # "play.google.com" links.
 echo "Determining stable Chromium version..."
 echo
-CHROMIUM_STABLE="$(curl 'https://chromereleases.googleblog.com/search/label/Stable%20updates' | grep 'https://chromium.googlesource.com/chromium/src/+log/' | grep -v 'play.google.com' | tac | tail -1 | sed 's/.\++log\/[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+\.\.\([0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+\).\+/\1/')"
+CHROMIUM_STABLE="$(curl 'https://chromereleases.googleblog.com/search/label/Stable%20updates' \
+  | grep 'https://chromium.googlesource.com/chromium/src/+log/' \
+  | grep -v 'play.google.com' \
+  | tac \
+  | tail -1 \
+  | sed 's/.\++log\/[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+\.\.\([0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+\).\+/\1/')"
 CHROMIUM_BRANCH="https://chromium.googlesource.com/chromium/src/+/${CHROMIUM_STABLE}"
 echo
 echo "Found: ${CHROMIUM_STABLE}"
@@ -21,7 +30,11 @@ echo
 # provides raw blob downloads in base64 format, for some reason.
 echo "Determining v8 revision from Chromium ${CHROMIUM_STABLE}..."
 echo
-V8_REVISION="$(curl "${CHROMIUM_BRANCH}/DEPS?format=TEXT" | base64 --decode | grep -A1 v8_revision | tail -1 | sed "s/[ ']//g")"
+V8_REVISION="$(curl "${CHROMIUM_BRANCH}/DEPS?format=TEXT" \
+  | base64 --decode \
+  | grep -A1 v8_revision \
+  | tail -1 \
+  | sed "s/[ ']//g")"
 V8_BRANCH="https://chromium.googlesource.com/v8/v8/+/${V8_REVISION}"
 echo
 echo "Found: ${V8_REVISION}"
@@ -30,13 +43,15 @@ echo
 
 echo "Downloading browser_protocol.json from Chromium ${CHROMIUM_STABLE}..."
 echo
-curl "${CHROMIUM_BRANCH}/third_party/WebKit/Source/core/inspector/browser_protocol.json?format=TEXT" | base64 --decode >json/browser_protocol.json
+curl "${CHROMIUM_BRANCH}/third_party/WebKit/Source/core/inspector/browser_protocol.json?format=TEXT" \
+  | base64 --decode >json/browser_protocol.json
 echo
 echo
 
 echo "Downloading js_protocol.json from v8 revision ${V8_REVISION}..."
 echo
-curl "${V8_BRANCH}/src/inspector/js_protocol.json?format=TEXT" | base64 --decode >json/js_protocol.json
+curl "${V8_BRANCH}/src/inspector/js_protocol.json?format=TEXT" \
+  | base64 --decode >json/js_protocol.json
 echo
 echo
 
