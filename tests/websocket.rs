@@ -8,6 +8,15 @@ use serde::Deserialize;
 use cdp::websocket::{page, Command, OwnedClientMessage, OwnedServerMessage};
 
 #[test]
+fn test_websocket_url_format() {
+    let expected_websocket_url = "ws://localhost:9222/devtools/page/0";
+    let actual_websocket_url = format!(cdp_websocket_url_format!(),
+                                       server_addr = "localhost:9222",
+                                       page_id = "0");
+    assert_eq!(expected_websocket_url, actual_websocket_url);
+}
+
+#[test]
 fn test_serialize_client_message() {
     let message = OwnedClientMessage {
         id: 1,

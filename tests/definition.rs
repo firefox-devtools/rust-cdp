@@ -7,12 +7,27 @@ use std::io::prelude::*;
 
 use cdp::definition::Definition;
 
-/*
 #[test]
-fn test_deserialize_definition() {
-    let mut src = String::new();
-    File::open("browser_protocol.json").unwrap().read_to_string(&mut src).unwrap();
-    let def: Definition = serde_json::from_str(src.as_str()).unwrap();
-    println!("{:#?}", def);
+fn test_browser_protocol() {
+    do_test_protocol_file("json/browser_protocol.json");
 }
-*/
+
+#[test]
+fn test_js_protocol() {
+    do_test_protocol_file("json/js_protocol.json");
+}
+
+fn do_test_protocol_file(file: &str) {
+    let mut orig_src = String::new();
+    File::open(file).unwrap().read_to_string(&mut orig_src).expect("proto def read error");
+    let orig_def: Definition = serde_json::from_str(orig_src.as_str())
+        .expect("proto def parse error");
+
+    let new_src = serde_json::to_string(&orig_def).expect("proto def serialize error");
+    let new_def: Definition = serde_json::from_str(new_src.as_str())
+        .expect("proto def (re-)parse error");
+
+    assert_eq!(orig_def, new_def);
+    assert_eq!(new_src,
+               serde_json::to_string(&new_def).expect("proto def (re-)serialize error"));
+}
