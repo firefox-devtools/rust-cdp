@@ -2,7 +2,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de;
 use std::fmt::{self, Display, Formatter};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Definition {
     pub version: Version,
     pub domains: Vec<Domain>,
@@ -39,7 +39,7 @@ impl Display for Version {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Domain {
     pub name: String,
     pub description: Option<String>,
@@ -69,7 +69,7 @@ impl<'de> Deserialize<'de> for Domain {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Type {
     Reference(String),
     Boolean,
@@ -86,7 +86,7 @@ pub enum Type {
     Any,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TypeDef {
     pub name: String,
     pub description: Option<String>,
@@ -113,7 +113,7 @@ impl<'de> Deserialize<'de> for TypeDef {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Method {
     pub name: String,
     pub description: Option<String>,
@@ -143,7 +143,7 @@ impl<'de> Deserialize<'de> for Method {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Field {
     pub name: String,
     pub description: Option<String>,
@@ -171,7 +171,7 @@ impl<'de> Deserialize<'de> for Field {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Item {
     pub description: Option<String>,
     pub ty: Type,
@@ -276,7 +276,7 @@ impl<'a> From<&'a Domain> for DomainImpl {
             dependencies: def.dependencies.clone(),
             type_defs: def.type_defs.iter().map(From::from).collect(),
             commands: def.commands.iter().map(From::from).collect(),
-            events: def.commands.iter().map(From::from).collect(),
+            events: def.events.iter().map(From::from).collect(),
         }
     }
 }
@@ -649,7 +649,7 @@ impl<'a> From<&'a Type> for TypeImpl {
             }
             Type::Integer => {
                 TypeImpl {
-                    primitive: Some(Primitive::Boolean),
+                    primitive: Some(Primitive::Integer),
                     reference: None,
                     enum_values: None,
                     item: None,
@@ -660,7 +660,7 @@ impl<'a> From<&'a Type> for TypeImpl {
             }
             Type::Number => {
                 TypeImpl {
-                    primitive: Some(Primitive::Boolean),
+                    primitive: Some(Primitive::Number),
                     reference: None,
                     enum_values: None,
                     item: None,
