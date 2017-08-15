@@ -550,13 +550,13 @@ fn generate_method<'a>(domain: &Domain,
             Some(quote! { { #(#fields, )* } })
         }
     };
-    let request_variant_attr = match request_variant_content {
+    let request_variant_attrs = match request_variant_content {
         Some(_) => None,
-        None => Some(quote! { #[serde(empty_struct)] }),
+        None => Some(unit_variant_attrs()),
     };
     request_variants.push(quote! {
         #[serde(rename = #method_qualified)]
-        #request_variant_attr
+        #request_variant_attrs
         #variant_meta_attrs
         #variant_pascal_case #request_variant_content
     });
@@ -584,8 +584,8 @@ fn generate_method<'a>(domain: &Domain,
             #method_qualified => Some(#command_arm_body)
         });
 
-        let response_variant_attr = match response_struct_pascal_case {
-            None => Some(quote! { #[serde(empty_struct)] }),
+        let response_variant_attrs = match response_struct_pascal_case {
+            None => Some(unit_variant_attrs()),
             Some(_) => None,
         };
         let response_variant_content = match response_struct_pascal_case {
@@ -596,7 +596,7 @@ fn generate_method<'a>(domain: &Domain,
         };
         command_refs.response_variants.push(quote! {
             #[serde(rename = #method_qualified)]
-            #response_variant_attr
+            #response_variant_attrs
             #variant_meta_attrs
             #variant_pascal_case #response_variant_content
         });
@@ -795,6 +795,13 @@ fn resolve_reference(domain_snake_case: &Ident,
             let item_pascal_case = pascal_case_ident(&captures[2]);
             quote! { ::websocket::#module_snake_case::#item_pascal_case }
         }
+    }
+}
+
+fn unit_variant_attrs() -> Tokens {
+    quote! {
+        #[serde(serialize_with = "serialize_unit_variant_as_empty_struct")]
+        #[serde(deserialize_with = "deserialize_empty_struct_as_unit_variant")]
     }
 }
 

@@ -44,9 +44,39 @@ pub fn parse_websocket_path_with_slash(path: &str) -> Option<&str> {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-#[serde(empty_struct)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Empty;
+
+#[derive(Serialize, Deserialize)]
+struct EmptyImpl {}
+
+impl Serialize for Empty {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where S: Serializer
+    {
+        (EmptyImpl {}).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Empty {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where D: Deserializer<'de>
+    {
+        EmptyImpl::deserialize(deserializer).map(|_| Empty)
+    }
+}
+
+fn serialize_unit_variant_as_empty_struct<S>(serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer,
+{
+    (Empty {}).serialize(serializer)
+}
+
+fn deserialize_empty_struct_as_unit_variant<'de, D>(deserializer: D) -> Result<(), D::Error>
+    where D: Deserializer<'de>,
+{
+    Empty::deserialize(deserializer).map(|_| ())
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ClientMessage<'a> {
