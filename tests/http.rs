@@ -4,8 +4,7 @@ extern crate serde_json;
 #[macro_use]
 extern crate cdp;
 
-use std::fmt::Debug;
-use serde::{Deserialize, Serialize};
+mod helper;
 
 use cdp::http::{DevToolsUrls, HttpCommand, HttpResponse, OwnedHttpCommand, Page, PageType,
                 VersionInfo};
@@ -28,7 +27,7 @@ fn test_json_version_info() {
         webkit_version: None,
     };
 
-    do_test_json(json, &rust);
+    helper::do_test_json(json, &rust);
 }
 
 #[test]
@@ -54,36 +53,7 @@ fn test_json_page() {
         devtools_urls: Some(DevToolsUrls::new(&"127.0.0.1:9222".parse().unwrap(), "0")),
     };
 
-    do_test_json(json, &rust);
-}
-
-fn do_test_json<T>(json: &str, rust: &T)
-    where for<'de> T: Deserialize<'de> + Serialize + Eq + Debug
-{
-    do_test_json_ser(json, rust);
-    do_test_json_de(json, rust);
-}
-
-fn do_test_json_ser<T>(json: &str, rust: &T)
-    where T: Serialize + Eq + Debug
-{
-    let ser = serde_json::to_string_pretty(rust).expect("serialize error");
-    assert_eq!(json,
-               ser,
-               "json serialize mismatch\n\nexpected:\n{}\n\nactual:\n{}",
-               json,
-               ser);
-}
-
-fn do_test_json_de<T>(json: &str, rust: &T)
-    where for<'de> T: Deserialize<'de> + Eq + Debug
-{
-    let de: T = serde_json::from_str(json).expect("deserialize error");
-    assert_eq!(rust,
-               &de,
-               "json deserialize mismatch\n\nexpected:\n{:#?}\n\nactual:\n{:#?}",
-               rust,
-               &de);
+    helper::do_test_json(json, &rust);
 }
 
 #[test]
@@ -244,7 +214,7 @@ fn test_http_response_version_info() {
     });
 
     assert_eq!(rust.status(), 200);
-    do_test_json_ser(json, &rust);
+    helper::do_test_json_ser(json, &rust);
 }
 
 #[test]
@@ -278,7 +248,7 @@ fn test_http_response_page_list() {
                                     }]);
 
     assert_eq!(rust.status(), 200);
-    do_test_json_ser(json, &rust);
+    helper::do_test_json_ser(json, &rust);
 }
 
 #[test]
@@ -305,7 +275,7 @@ fn test_http_response_new_page() {
     });
 
     assert_eq!(rust.status(), 200);
-    do_test_json_ser(json, &rust);
+    helper::do_test_json_ser(json, &rust);
 }
 
 #[test]
