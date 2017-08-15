@@ -13,9 +13,6 @@ extern crate serde_json;
 extern crate lazy_static;
 
 #[macro_use]
-extern crate quick_error;
-
-#[macro_use]
 extern crate quote;
 
 #[macro_use]
@@ -26,10 +23,9 @@ mod definition;
 use inflector::Inflector;
 use quote::{Ident, Tokens};
 use regex::Regex;
-use quick_error::ResultExt;
 use std::env;
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::Write;
 use std::path::Path;
 
 use definition::{Definition, Domain, Field, Method, Type, TypeDef, Version};
@@ -37,8 +33,10 @@ use definition::{Definition, Domain, Field, Method, Type, TypeDef, Version};
 fn main() {
     let out_dir = env::var("OUT_DIR").expect("Error retrieving OUT_DIR environment variable");
 
-    let browser_protocol = read_protocol_file("json/browser_protocol.json").unwrap();
-    let js_protocol = read_protocol_file("json/js_protocol.json").unwrap();
+    let browser_protocol = read_protocol_file("json/browser_protocol.json",
+                                              "error reading browser_protocol.json");
+    let js_protocol = read_protocol_file("json/js_protocol.json", "error reading js_protocol.json");
+
     if browser_protocol.version != js_protocol.version {
         panic!("json/browser_protocol.json and json/js_protocol.json versions don't match");
     }
@@ -49,34 +47,18 @@ fn main() {
     constants_file.write_all(constants_src.as_bytes())
         .expect("Error writing generated constants.rs");
 
-    let websocket_src =
-        generate_websocket(browser_protocol.domains.iter().chain(js_protocol.domains.iter()));
-    let websocket_path = Path::new(&out_dir).join("websocket.rs");
-    let mut websocket_file = File::create(websocket_path).expect("Error creating websocket.rs");
-    websocket_file.write_all(websocket_src.as_bytes())
-        .expect("Error writing generated websocket.rs");
+    let ws_src = generate_ws(browser_protocol.domains.iter().chain(js_protocol.domains.iter()));
+    let ws_path = Path::new(&out_dir).join("ws_generated.rs");
+    let mut ws_file = File::create(ws_path).expect("Error creating ws_generated.rs");
+    ws_file.write_all(ws_src.as_bytes()).expect("Error writing ws_generated.rs");
+
+    println!("cargo:rerun-if-changed=json/browser_protocol.json");
+    println!("cargo:rerun-if-changed=json/js_protocol.json");
 }
 
-quick_error! {
-    #[derive(Debug)]
-    enum ReadProtocolFileError {
-        Io(inner: io::Error, file: &'static str) {
-            description("I/O error")
-            display("I/O error reading {}: {}", file, inner)
-            cause(inner)
-            context(file: &'static str, inner: io::Error) -> (inner, file)
-        }
-        Json(inner: serde_json::Error, file: &'static str) {
-            description("JSON parse error")
-            display("JSON parse error reading {}: {}", file, inner)
-            cause(inner)
-            context(file: &'static str, inner: serde_json::Error) -> (inner, file)
-        }
-    }
-}
-
-fn read_protocol_file(file: &'static str) -> Result<Definition, ReadProtocolFileError> {
-    serde_json::from_reader(File::open(file).context(file)?).context(file).map_err(From::from)
+fn read_protocol_file(file: &str, msg: &str) -> Definition {
+    let mut file = File::open(file).expect(msg);
+    serde_json::from_reader(&mut file).expect(msg)
 }
 
 fn generate_constants(version: &Version) -> String {
@@ -94,7 +76,7 @@ struct CommandRefs<'a> {
     response_name_arms: &'a mut Vec<Tokens>,
 }
 
-fn generate_websocket<'a, T>(domains: T) -> String
+fn generate_ws<'a, T>(domains: T) -> String
     where T: Iterator<Item = &'a Domain>
 {
     let mut command_variants = vec![];
@@ -325,7 +307,7 @@ fn generate_type_expr(domain_snake_case: &Ident,
         Some(expr) => expr,
         None => {
             let type_def_pascal_case = combine_parent_field_idents(parent_pascal_case, field_name);
-            quote! { ::websocket::#domain_snake_case::#type_def_pascal_case }
+            quote! { ::ws::#domain_snake_case::#type_def_pascal_case }
         }
     }
 }
@@ -354,8 +336,10 @@ fn generate_type_expr_impl(domain_snake_case: &Ident,
                                                  parent_variant_pascal_case,
                                                  parent_pascal_case,
                                                  field_name);
-            let meta_attrs =
-                generate_meta_attrs(deprecation_status, experimental, description, note);
+            let meta_attrs = generate_meta_attrs(deprecation_status,
+                                                 experimental,
+                                                 description,
+                                                 note);
             let variants: Vec<Tokens> = values.iter().map(generate_type_enum_variant).collect();
 
             type_defs.push(quote! {
@@ -388,7 +372,7 @@ fn generate_type_expr_impl(domain_snake_case: &Ident,
         }
         Type::Object(ref properties) => {
             if properties.is_empty() {
-                Some(quote! { ::websocket::Empty })
+                Some(quote! { ::ws::Empty })
             } else {
                 let type_def_pascal_case = combine_parent_field_idents(parent_pascal_case,
                                                                        field_name);
@@ -396,8 +380,10 @@ fn generate_type_expr_impl(domain_snake_case: &Ident,
                                                      parent_variant_pascal_case,
                                                      parent_pascal_case,
                                                      field_name);
-                let meta_attrs =
-                    generate_meta_attrs(deprecation_status, experimental, description, note);
+                let meta_attrs = generate_meta_attrs(deprecation_status,
+                                                     experimental,
+                                                     description,
+                                                     note);
                 let fields: Vec<Tokens> = properties.iter()
                     .map(|field| {
                         generate_field(domain_snake_case,
@@ -436,7 +422,7 @@ fn generate_field_usage_note(domain_snake_case: &Ident,
         match parent_variant_pascal_case {
             Some(parent_variant_pascal_case) => {
                 format!("Used in the type of \
-                         [`cdp::websocket::Command::{}::{}`]\
+                         [`cdp::ws::Command::{}::{}`]\
                          (../enum.Command.html#variant.{}).",
                         parent_variant_pascal_case,
                         field_snake_case,
@@ -444,7 +430,7 @@ fn generate_field_usage_note(domain_snake_case: &Ident,
             }
             None => {
                 format!("Used in the type of \
-                         [`cdp::websocket::{}::{}::{}`](struct.{}.html#structfield.{}).",
+                         [`cdp::ws::{}::{}::{}`](struct.{}.html#structfield.{}).",
                         domain_snake_case,
                         parent_pascal_case,
                         field_snake_case,
@@ -475,14 +461,19 @@ fn generate_method<'a>(domain: &Domain,
                        mut command_refs: Option<&mut CommandRefs<'a>>,
                        domain_index: &mut String,
                        type_defs: &mut Vec<Tokens>) {
-    let category = if command_refs.is_some() { "Command" } else { "Event" };
+    let category = if command_refs.is_some() {
+        "Command"
+    } else {
+        "Event"
+    };
     let enum_pascal_case = Ident::from(category);
 
     let method_qualified = format!("{}.{}", domain.name, method.name);
     let method_pascal_case = pascal_case_ident(&method.name);
 
     let variant_pascal_case = Ident::from(format!("{}{}", domain_pascal_case, method_pascal_case));
-    let parameters_struct_pascal_case = if command_refs.is_some() && !method.parameters.is_empty() {
+    let parameters_struct_pascal_case = if command_refs.is_some() &&
+                                           !method.parameters.is_empty() {
         Some(Ident::from(format!("{}Params", method_pascal_case)))
     } else {
         None
@@ -523,15 +514,15 @@ fn generate_method<'a>(domain: &Domain,
                                                  &method.description,
                                                  Some(variant_note));
     let struct_meta_attrs = generate_meta_attrs(&deprecation_status,
-                                                 experimental,
-                                                 &method.description,
-                                                 Some(struct_note));
+                                                experimental,
+                                                &method.description,
+                                                Some(struct_note));
 
     let request_variant_content = if command_refs.is_some() {
         match parameters_struct_pascal_case {
             None => None,
             Some(ref parameters_struct_pascal_case) => {
-                Some(quote! { (::websocket::#domain_snake_case::#parameters_struct_pascal_case) })
+                Some(quote! { (::ws::#domain_snake_case::#parameters_struct_pascal_case) })
             }
         }
     } else {
@@ -554,33 +545,33 @@ fn generate_method<'a>(domain: &Domain,
             Some(quote! { { #(#fields, )* } })
         }
     };
-    let request_variant_attrs = match request_variant_content {
+    let request_unit_variant_attrs = match request_variant_content {
         Some(_) => None,
         None => Some(unit_variant_attrs()),
     };
     request_variants.push(quote! {
         #[serde(rename = #method_qualified)]
-        #request_variant_attrs
+        #request_unit_variant_attrs
         #variant_meta_attrs
         #variant_pascal_case #request_variant_content
     });
     request_name_arms.push(quote! {
-        ::websocket::#enum_pascal_case::#variant_pascal_case {..} => #method_qualified
+        ::ws::#enum_pascal_case::#variant_pascal_case {..} => #method_qualified
     });
 
     if let Some(ref mut command_refs) = command_refs {
         let command_arm_body = match parameters_struct_pascal_case {
             None => {
                 quote! {
-                    ::websocket::Empty::deserialize(deserializer).map(|_| {
-                        ::websocket::#enum_pascal_case::#variant_pascal_case
+                    ::ws::Empty::deserialize(deserializer).map(|_| {
+                        ::ws::#enum_pascal_case::#variant_pascal_case
                     })
                 }
             }
             Some(ref parameters_struct_pascal_case) => {
                 quote! {
-                    ::websocket::#domain_snake_case::#parameters_struct_pascal_case::deserialize(deserializer)
-                        .map(::websocket::#enum_pascal_case::#variant_pascal_case)
+                    ::ws::#domain_snake_case::#parameters_struct_pascal_case::deserialize(deserializer)
+                        .map(::ws::#enum_pascal_case::#variant_pascal_case)
                 }
             }
         };
@@ -588,25 +579,25 @@ fn generate_method<'a>(domain: &Domain,
             #method_qualified => Some(#command_arm_body)
         });
 
-        let response_variant_attrs = match response_struct_pascal_case {
+        let response_unit_variant_attrs = match response_struct_pascal_case {
             None => Some(unit_variant_attrs()),
             Some(_) => None,
         };
         let response_variant_content = match response_struct_pascal_case {
             None => None,
             Some(ref response_struct_pascal_case) => {
-                Some(quote!{(::websocket::#domain_snake_case::#response_struct_pascal_case)})
+                Some(quote!{(::ws::#domain_snake_case::#response_struct_pascal_case)})
             }
         };
         command_refs.response_variants.push(quote! {
             #[serde(rename = #method_qualified)]
-            #response_variant_attrs
+            #response_unit_variant_attrs
             #variant_meta_attrs
             #variant_pascal_case #response_variant_content
         });
 
         command_refs.response_name_arms.push(quote! {
-            ::websocket::Response::#variant_pascal_case {..} => #method_qualified
+            ::ws::Response::#variant_pascal_case {..} => #method_qualified
         });
     }
 
@@ -619,7 +610,7 @@ fn generate_method<'a>(domain: &Domain,
                                &parameters_struct_pascal_case,
                                &deprecation_status,
                                experimental,
-                               field, 
+                               field,
                                type_defs)
             })
             .collect();
@@ -641,7 +632,7 @@ fn generate_method<'a>(domain: &Domain,
                                &response_struct_pascal_case,
                                &deprecation_status,
                                experimental,
-                               field, 
+                               field,
                                type_defs)
             })
             .collect();
@@ -752,19 +743,30 @@ fn generate_meta_attrs(deprecation_status: &DeprecationStatus,
 fn snake_case_ident<T>(src: T) -> Ident
     where T: AsRef<str>
 {
-    let snake_case = replace_unsafe_chars(src.as_ref()).to_snake_case();
-    let safe = match snake_case.as_ref() {
-        "type" => "ty",
-        "override" => "overridden",
-        x => x,
-    };
-    Ident::from(safe)
+    Ident::from(snake_case(src))
 }
 
 fn pascal_case_ident<T>(src: T) -> Ident
     where T: AsRef<str>
 {
-    Ident::from(replace_unsafe_chars(src.as_ref()).to_snake_case().to_pascal_case())
+    Ident::from(pascal_case(src))
+}
+
+fn snake_case<T>(src: T) -> String
+    where T: AsRef<str>
+{
+    let snake_case = replace_unsafe_chars(src.as_ref()).to_snake_case();
+    match snake_case.as_str() {
+        "type" => "ty".into(),
+        "override" => "overridden".into(),
+        _ => snake_case,
+    }
+}
+
+fn pascal_case<T>(src: T) -> String
+    where T: AsRef<str>
+{
+    replace_unsafe_chars(src.as_ref()).to_snake_case().to_pascal_case()
 }
 
 fn replace_unsafe_chars<T>(src: T) -> String
@@ -793,11 +795,11 @@ fn resolve_reference(domain_snake_case: &Ident,
     }
 
     match INTER_DOMAIN_RE.captures(target) {
-        None => quote! { ::websocket::#domain_snake_case::#target_pascal_case },
+        None => quote! { ::ws::#domain_snake_case::#target_pascal_case },
         Some(captures) => {
-            let module_snake_case = snake_case_ident(&captures[1]);
+            let domain_snake_case = snake_case_ident(&captures[1]);
             let item_pascal_case = pascal_case_ident(&captures[2]);
-            quote! { ::websocket::#module_snake_case::#item_pascal_case }
+            quote! { ::ws::#domain_snake_case::#item_pascal_case }
         }
     }
 }
@@ -876,22 +878,19 @@ fn generate_method_note(domain_snake_case: &Ident,
                         category: &'static str)
                         -> String {
     let domain_link_prefix = if is_variant_note {
-        format!("{domain_snake_case}/", domain_snake_case = domain_snake_case)
+        format!("{domain_snake_case}/",
+                domain_snake_case = domain_snake_case)
     } else {
         "".into()
     };
-    let variant_link_prefix = if is_variant_note {
-        ""
-    } else {
-        "../"
-    };
+    let variant_link_prefix = if is_variant_note { "" } else { "../" };
 
     let parameters_struct_line = match parameters_struct_pascal_case {
         &None => String::new(),
         &Some(ref parameters_struct_pascal_case) => {
             format!(
 r#"  
-*Parameters Struct:* [`cdp::websocket::{domain_snake_case}::{parameters_struct_pascal_case}`]({domain_link_prefix}struct.{parameters_struct_pascal_case}.html)"#,
+*Parameters Struct:* [`cdp::ws::{domain_snake_case}::{parameters_struct_pascal_case}`]({domain_link_prefix}struct.{parameters_struct_pascal_case}.html)"#,
                     domain_snake_case = domain_snake_case,
                     parameters_struct_pascal_case = parameters_struct_pascal_case,
                     domain_link_prefix = domain_link_prefix)
@@ -901,7 +900,7 @@ r#"
     let response_variant_line = if has_response_variant {
         format!(
 r#"  
-*Response Variant:* [`cdp::websocket::Response::{variant_pascal_case}`]({variant_link_prefix}enum.Response.html#variant.{variant_pascal_case})"#,
+*Response Variant:* [`cdp::ws::Response::{variant_pascal_case}`]({variant_link_prefix}enum.Response.html#variant.{variant_pascal_case})"#,
                 variant_pascal_case = variant_pascal_case,
                 variant_link_prefix = variant_link_prefix)
     } else {
@@ -913,7 +912,7 @@ r#"
         &Some(ref response_struct_pascal_case) => {
             format!(
 r#"  
-*Response Struct:* [`cdp::websocket::{domain_snake_case}::{response_struct_pascal_case}`]({domain_link_prefix}struct.{response_struct_pascal_case}.html)"#,
+*Response Struct:* [`cdp::ws::{domain_snake_case}::{response_struct_pascal_case}`]({domain_link_prefix}struct.{response_struct_pascal_case}.html)"#,
                 domain_snake_case = domain_snake_case,
                 response_struct_pascal_case = response_struct_pascal_case,
                 domain_link_prefix = domain_link_prefix)
@@ -923,8 +922,8 @@ r#"
     format!(
 r#"# {category} `{method_qualified}`
 
-*Domain Module:* [`cdp::websocket::{domain_snake_case}`]({domain_link_prefix}index.html)  
-*{category} Variant:* [`cdp::websocket::{category}::{variant_pascal_case}`]({variant_link_prefix}enum.{category}.html#variant.{variant_pascal_case}){parameters_struct_line}{response_variant_line}{response_struct_line}"#,
+*Domain Module:* [`cdp::ws::{domain_snake_case}`]({domain_link_prefix}index.html)  
+*{category} Variant:* [`cdp::ws::{category}::{variant_pascal_case}`]({variant_link_prefix}enum.{category}.html#variant.{variant_pascal_case}){parameters_struct_line}{response_variant_line}{response_struct_line}"#,
             domain_snake_case = domain_snake_case,
             method_qualified = method_qualified,
             variant_pascal_case = variant_pascal_case,

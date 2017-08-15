@@ -78,7 +78,7 @@ impl Serialize for Page {
         state.serialize_field("url", &self.url)?;
 
         if let Some(ref urls) = self.devtools_urls {
-            state.serialize_field("webSocketDebuggerUrl", &urls.websocket_url)?;
+            state.serialize_field("webSocketDebuggerUrl", &urls.ws_url)?;
         }
 
         state.end()
@@ -97,7 +97,7 @@ impl<'de> Deserialize<'de> for Page {
             Title,
             Type,
             Url,
-            WebSocketUrl,
+            WsUrl,
             Unknown,
         }
 
@@ -121,7 +121,7 @@ impl<'de> Deserialize<'de> for Page {
                     "title" => Ok(Field::Title),
                     "type" => Ok(Field::Type),
                     "url" => Ok(Field::Url),
-                    "webSocketDebuggerUrl" => Ok(Field::WebSocketUrl),
+                    "webSocketDebuggerUrl" => Ok(Field::WsUrl),
                     _ => Ok(Field::Unknown),
                 }
             }
@@ -137,7 +137,7 @@ impl<'de> Deserialize<'de> for Page {
                     b"title" => Ok(Field::Title),
                     b"type" => Ok(Field::Type),
                     b"url" => Ok(Field::Url),
-                    b"webSocketDebuggerUrl" => Ok(Field::WebSocketUrl),
+                    b"webSocketDebuggerUrl" => Ok(Field::WsUrl),
                     _ => Ok(Field::Unknown),
                 }
             }
@@ -202,16 +202,16 @@ impl<'de> Deserialize<'de> for Page {
                     None => return Err(de::Error::invalid_length(6, &"tuple of 8 elements")),
                 };
 
-                let websocket_url = match seq.next_element::<Option<String>>()? {
+                let ws_url = match seq.next_element::<Option<String>>()? {
                     Some(value) => value,
                     None => return Err(de::Error::invalid_length(7, &"tuple of 8 elements")),
                 };
 
-                let devtools_urls = match (websocket_url, frontend_url) {
+                let devtools_urls = match (ws_url, frontend_url) {
                     (None, None) => None,
-                    (Some(websocket_url), Some(frontend_url)) => {
+                    (Some(ws_url), Some(frontend_url)) => {
                         Some(DevToolsUrls {
-                            websocket_url: websocket_url,
+                            ws_url: ws_url,
                             frontend_url: frontend_url,
                         })
                     }
@@ -241,7 +241,7 @@ impl<'de> Deserialize<'de> for Page {
                 let mut title: Option<String> = None;
                 let mut ty: Option<PageType> = None;
                 let mut url: Option<String> = None;
-                let mut websocket_url: Option<String> = None;
+                let mut ws_url: Option<String> = None;
 
                 while let Some(key) = map.next_key::<Field>()? {
                     match key {
@@ -288,11 +288,11 @@ impl<'de> Deserialize<'de> for Page {
                             }
                             url = Some(map.next_value::<String>()?);
                         }
-                        Field::WebSocketUrl => {
-                            if websocket_url.is_some() {
+                        Field::WsUrl => {
+                            if ws_url.is_some() {
                                 return Err(de::Error::duplicate_field("webSocketDebuggerUrl"));
                             }
-                            websocket_url = map.next_value::<Option<String>>()?;
+                            ws_url = map.next_value::<Option<String>>()?;
                         }
                         _ => {
                             map.next_value::<IgnoredAny>()?;
@@ -300,11 +300,11 @@ impl<'de> Deserialize<'de> for Page {
                     }
                 }
 
-                let devtools_urls = match (websocket_url, frontend_url) {
+                let devtools_urls = match (ws_url, frontend_url) {
                     (None, None) => None,
-                    (Some(websocket_url), Some(frontend_url)) => {
+                    (Some(ws_url), Some(frontend_url)) => {
                         Some(DevToolsUrls {
-                            websocket_url: websocket_url,
+                            ws_url: ws_url,
                             frontend_url: frontend_url,
                         })
                     }
@@ -345,7 +345,7 @@ macro_rules! cdp_frontend_url_format {
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DevToolsUrls {
     #[serde(rename = "webSocketDebuggerUrl")]
-    pub websocket_url: String,
+    pub ws_url: String,
     #[serde(rename = "devtoolsFrontendUrl")]
     pub frontend_url: String,
 }
@@ -355,9 +355,9 @@ impl DevToolsUrls {
         where S: AsRef<str>
     {
         DevToolsUrls {
-            websocket_url: format!(cdp_websocket_url_format!(),
-                                   server_addr = addr,
-                                   page_id = page_id.as_ref()),
+            ws_url: format!(cdp_ws_url_format!(),
+                            server_addr = addr,
+                            page_id = page_id.as_ref()),
             frontend_url: format!(cdp_frontend_url_format!(),
                                   server_addr = addr,
                                   page_id = page_id.as_ref()),
@@ -474,27 +474,27 @@ macro_rules! cdp_http_activate_page_url_format {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub enum HttpCommand<'a> {
+pub enum Command<'a> {
     VersionInfo,
     PageList,
     NewPage(Option<&'a str>),
     ActivatePage(&'a str),
 }
 
-impl<'a> From<&'a OwnedHttpCommand> for HttpCommand<'a> {
-    fn from(message: &'a OwnedHttpCommand) -> Self {
+impl<'a> From<&'a OwnedCommand> for Command<'a> {
+    fn from(message: &'a OwnedCommand) -> Self {
         match *message {
-            OwnedHttpCommand::VersionInfo => HttpCommand::VersionInfo,
-            OwnedHttpCommand::PageList => HttpCommand::PageList,
-            OwnedHttpCommand::NewPage(ref maybe_url) => {
-                HttpCommand::NewPage(maybe_url.as_ref().map(|x| x.as_str()))
+            OwnedCommand::VersionInfo => Command::VersionInfo,
+            OwnedCommand::PageList => Command::PageList,
+            OwnedCommand::NewPage(ref maybe_url) => {
+                Command::NewPage(maybe_url.as_ref().map(|x| x.as_str()))
             }
-            OwnedHttpCommand::ActivatePage(ref page_id) => HttpCommand::ActivatePage(page_id),
+            OwnedCommand::ActivatePage(ref page_id) => Command::ActivatePage(page_id),
         }
     }
 }
 
-impl<'a> HttpCommand<'a> {
+impl<'a> Command<'a> {
     pub fn parse(path: &'a str, query: Option<&'a str>) -> Option<Self> {
         lazy_static! {
             static ref HTTP_PATH_RE: Regex =
@@ -504,14 +504,14 @@ impl<'a> HttpCommand<'a> {
 
         HTTP_PATH_RE.captures(path).and_then(move |captures| {
             match captures.get(2) {
-                None => Some(HttpCommand::PageList),
+                None => Some(Command::PageList),
                 Some(command) => {
                     match command.as_str() {
-                        cdp_http_version_info_slug!() => Some(HttpCommand::VersionInfo),
-                        cdp_http_page_list_slug!() => Some(HttpCommand::PageList),
-                        cdp_http_new_page_slug!() => Some(HttpCommand::NewPage(query)),
+                        cdp_http_version_info_slug!() => Some(Command::VersionInfo),
+                        cdp_http_page_list_slug!() => Some(Command::PageList),
+                        cdp_http_new_page_slug!() => Some(Command::NewPage(query)),
                         cdp_http_activate_page_slug!() => {
-                            Some(HttpCommand::ActivatePage(match captures.get(4) {
+                            Some(Command::ActivatePage(match captures.get(4) {
                                 None => "",
                                 Some(url) => url.as_str(),
                             }))
@@ -525,7 +525,7 @@ impl<'a> HttpCommand<'a> {
 
     pub fn parse_with_slash(path: &'a str, query: Option<&'a str>) -> Option<Self> {
         if let Some('/') = path.chars().next() {
-            HttpCommand::parse(&path[1..], query)
+            Command::parse(&path[1..], query)
         } else {
             None
         }
@@ -533,61 +533,61 @@ impl<'a> HttpCommand<'a> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub enum OwnedHttpCommand {
+pub enum OwnedCommand {
     VersionInfo,
     PageList,
     NewPage(Option<String>),
     ActivatePage(String),
 }
 
-impl<'a, 'b> From<&'b HttpCommand<'a>> for OwnedHttpCommand {
-    fn from(message: &'b HttpCommand<'a>) -> Self {
+impl<'a, 'b> From<&'b Command<'a>> for OwnedCommand {
+    fn from(message: &'b Command<'a>) -> Self {
         match *message {
-            HttpCommand::VersionInfo => OwnedHttpCommand::VersionInfo,
-            HttpCommand::PageList => OwnedHttpCommand::PageList,
-            HttpCommand::NewPage(maybe_url) => OwnedHttpCommand::NewPage(maybe_url.map(Into::into)),
-            HttpCommand::ActivatePage(page_id) => OwnedHttpCommand::ActivatePage(page_id.into()),
+            Command::VersionInfo => OwnedCommand::VersionInfo,
+            Command::PageList => OwnedCommand::PageList,
+            Command::NewPage(maybe_url) => OwnedCommand::NewPage(maybe_url.map(Into::into)),
+            Command::ActivatePage(page_id) => OwnedCommand::ActivatePage(page_id.into()),
         }
     }
 }
 
-impl<'a> From<HttpCommand<'a>> for OwnedHttpCommand {
-    fn from(message: HttpCommand<'a>) -> Self {
+impl<'a> From<Command<'a>> for OwnedCommand {
+    fn from(message: Command<'a>) -> Self {
         match message {
-            HttpCommand::VersionInfo => OwnedHttpCommand::VersionInfo,
-            HttpCommand::PageList => OwnedHttpCommand::PageList,
-            HttpCommand::NewPage(maybe_url) => OwnedHttpCommand::NewPage(maybe_url.map(Into::into)),
-            HttpCommand::ActivatePage(page_id) => OwnedHttpCommand::ActivatePage(page_id.into()),
+            Command::VersionInfo => OwnedCommand::VersionInfo,
+            Command::PageList => OwnedCommand::PageList,
+            Command::NewPage(maybe_url) => OwnedCommand::NewPage(maybe_url.map(Into::into)),
+            Command::ActivatePage(page_id) => OwnedCommand::ActivatePage(page_id.into()),
         }
     }
 }
 
-impl OwnedHttpCommand {
+impl OwnedCommand {
     pub fn parse(path: &str, query: Option<&str>) -> Option<Self> {
-        HttpCommand::parse(path, query).map(|x| x.into())
+        Command::parse(path, query).map(|x| x.into())
     }
 
     pub fn parse_with_slash(path: &str, query: Option<&str>) -> Option<Self> {
-        HttpCommand::parse_with_slash(path, query).map(|x| x.into())
+        Command::parse_with_slash(path, query).map(|x| x.into())
     }
 }
 
 #[derive(Serialize, Clone, Debug, Eq, PartialEq)]
 #[serde(untagged)]
-pub enum HttpResponse {
+pub enum Response {
     VersionInfo(VersionInfo),
     PageList(Vec<Page>),
     NewPage(Page),
     ActivatePage(bool),
 }
 
-impl HttpResponse {
+impl Response {
     pub fn status(&self) -> u16 {
         match *self {
-            HttpResponse::VersionInfo(..) => 200,
-            HttpResponse::PageList(..) => 200,
-            HttpResponse::NewPage(..) => 200,
-            HttpResponse::ActivatePage(activated) => if activated { 200 } else { 404 },
+            Response::VersionInfo(..) => 200,
+            Response::PageList(..) => 200,
+            Response::NewPage(..) => 200,
+            Response::ActivatePage(activated) => if activated { 200 } else { 404 },
         }
     }
 }

@@ -13,8 +13,9 @@ extern crate serde_derive;
 extern crate serde_json;
 
 pub mod definition;
+mod ws_generated;
 #[macro_use]
-pub mod websocket;
+pub mod ws;
 pub mod http;
 
 #[macro_export]

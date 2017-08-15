@@ -7,11 +7,13 @@ rust:
   - beta
   - nightly
 
-sudo: false
+# Request the "secret" GCE VM environment (faster + more memory)
+sudo: 9000
+
 script:
-  - cargo build
-  - cargo test
-  - cargo doc --no-deps
+  - travis_wait cargo build --verbose
+  - travis_wait cargo test --verbose
+  - travis_wait cargo doc --verbose --no-deps
 
 notifications:
   email:

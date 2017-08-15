@@ -2,47 +2,45 @@
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at http://mozilla.org/MPL/2.0/.
 
-#![allow(deprecated)]
-
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{self, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
+use serde_json::{Map, Value};
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::mem;
 
-pub use serde_json::{Map, Value};
+pub use ws_generated::*;
 
 #[macro_export]
-macro_rules! cdp_websocket_devtools_path {
+macro_rules! cdp_ws_devtools_path {
     () => ( "devtools/page")
 }
 
 #[macro_export]
-macro_rules! cdp_websocket_devtools_path_format {
-    () => ( concat!(cdp_websocket_devtools_path!(), "/{page_id}") )
+macro_rules! cdp_ws_devtools_path_format {
+    () => ( concat!(cdp_ws_devtools_path!(), "/{page_id}") )
 }
 
 #[macro_export]
-macro_rules! cdp_websocket_url_format {
-    () => ( concat!("ws://{server_addr}/", cdp_websocket_devtools_path_format!()) )
+macro_rules! cdp_ws_url_format {
+    () => ( concat!("ws://{server_addr}/", cdp_ws_devtools_path_format!()) )
 }
 
-pub fn parse_websocket_path(path: &str) -> Option<&str> {
+pub fn parse_path(path: &str) -> Option<&str> {
     lazy_static! {
-        static ref WEBSOCKET_PATH_RE: Regex =
-            Regex::new(concat!(r"^", cdp_websocket_devtools_path!(), "/(.*)$"))
-                .expect("cdp: WEBSOCKET_PATH_RE compilation failed");
+        static ref WS_PATH_RE: Regex =
+            Regex::new(concat!(r"^", cdp_ws_devtools_path!(), "/(.*)$"))
+                .expect("cdp: WS_PATH_RE compilation failed");
     }
 
-    WEBSOCKET_PATH_RE.captures(path)
-        .map(|captures| captures.get(1).map(|m| m.as_str()).unwrap_or(""))
+    WS_PATH_RE.captures(path).map(|captures| captures.get(1).map(|m| m.as_str()).unwrap_or(""))
 }
 
-pub fn parse_websocket_path_with_slash(path: &str) -> Option<&str> {
+pub fn parse_path_with_slash(path: &str) -> Option<&str> {
     if let Some('/') = path.chars().next() {
-        parse_websocket_path(&path[1..])
+        parse_path(&path[1..])
     } else {
         None
     }
@@ -68,18 +66,6 @@ impl<'de> Deserialize<'de> for Empty {
     {
         EmptyImpl::deserialize(deserializer).map(|_| Empty)
     }
-}
-
-fn serialize_unit_variant_as_empty_struct<S>(serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer,
-{
-    (Empty {}).serialize(serializer)
-}
-
-fn deserialize_empty_struct_as_unit_variant<'de, D>(deserializer: D) -> Result<(), D::Error>
-    where D: Deserializer<'de>,
-{
-    Empty::deserialize(deserializer).map(|_| ())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -130,7 +116,7 @@ pub struct OwnedClientMessage {
 }
 
 impl OwnedClientMessage {
-    pub fn parse_incoming<'de, D>(deserializer: D) -> Result<Self, (DevToolsError, Option<u64>)>
+    pub fn parse_incoming<'de, D>(deserializer: D) -> Result<Self, (ServerError, Option<u64>)>
         where D: Deserializer<'de>
     {
         lazy_static! {
@@ -138,18 +124,18 @@ impl OwnedClientMessage {
         }
 
         let value =
-            Value::deserialize(deserializer).map_err(|_| (DevToolsError::invalid_json(), None))?;
-        let obj = value.as_object().ok_or_else(|| (DevToolsError::must_be_object(), None))?;
+            Value::deserialize(deserializer).map_err(|_| (ServerError::invalid_json(), None))?;
+        let obj = value.as_object().ok_or_else(|| (ServerError::must_be_object(), None))?;
         let id = obj.get("id")
             .and_then(Value::as_u64)
-            .ok_or_else(|| (DevToolsError::must_have_id(), None))?;
+            .ok_or_else(|| (ServerError::must_have_id(), None))?;
         let method = obj.get("method")
             .and_then(Value::as_str)
-            .ok_or_else(|| (DevToolsError::must_have_method(), Some(id)))?;
+            .ok_or_else(|| (ServerError::must_have_method(), Some(id)))?;
         let params = obj.get("params").unwrap_or_else(|| &*DEFAULT_PARAMS);
         let command = Command::parse_command(method, params)
-            .ok_or_else(|| (DevToolsError::method_not_found(method), Some(id)))?
-            .map_err(|e| (DevToolsError::invalid_parameters(e.to_string()), Some(id)))?;
+            .ok_or_else(|| (ServerError::method_not_found(method), Some(id)))?
+            .map_err(|e| (ServerError::invalid_parameters(e.to_string()), Some(id)))?;
         Ok(OwnedClientMessage {
             id: id,
             command: command,
@@ -772,10 +758,10 @@ impl<'a, 'de, A> SeqAccess<'de> for ClientMessageSeqAccess<'a, A>
 pub enum ServerMessage<'a, T: 'a = Value> {
     Response {
         id: u64,
-        result: Result<&'a T, &'a DevToolsError>,
+        result: Result<&'a T, &'a ServerError>,
     },
     Event(&'a Event),
-    Error(&'a DevToolsError),
+    Error(&'a ServerError),
 }
 
 impl<'a, T> From<&'a OwnedServerMessage<T>> for ServerMessage<'a, T> {
@@ -808,8 +794,8 @@ impl<'a, T> Clone for ServerMessage<'a, T> {
     }
 }
 
-impl<'a, T> From<(u64, Result<&'a T, &'a DevToolsError>)> for ServerMessage<'a, T> {
-    fn from((id, result): (u64, Result<&'a T, &'a DevToolsError>)) -> Self {
+impl<'a, T> From<(u64, Result<&'a T, &'a ServerError>)> for ServerMessage<'a, T> {
+    fn from((id, result): (u64, Result<&'a T, &'a ServerError>)) -> Self {
         ServerMessage::Response {
             id: id,
             result: result,
@@ -823,8 +809,8 @@ impl<'a, T> From<&'a Event> for ServerMessage<'a, T> {
     }
 }
 
-impl<'a, T> From<&'a DevToolsError> for ServerMessage<'a, T> {
-    fn from(error: &'a DevToolsError) -> Self {
+impl<'a, T> From<&'a ServerError> for ServerMessage<'a, T> {
+    fn from(error: &'a ServerError) -> Self {
         ServerMessage::Error(error)
     }
 }
@@ -843,10 +829,10 @@ impl<'a, T> Serialize for ServerMessage<'a, T>
 pub enum OwnedServerMessage<T = Value> {
     Response {
         id: u64,
-        result: Result<T, DevToolsError>,
+        result: Result<T, ServerError>,
     },
     Event(Event),
-    Error(DevToolsError),
+    Error(ServerError),
 }
 
 impl<'a, 'b, T> From<&'b ServerMessage<'a, T>> for OwnedServerMessage<T>
@@ -883,8 +869,8 @@ impl<'a, T> From<ServerMessage<'a, T>> for OwnedServerMessage<T>
     }
 }
 
-impl<T> From<(u64, Result<T, DevToolsError>)> for OwnedServerMessage<T> {
-    fn from((id, result): (u64, Result<T, DevToolsError>)) -> Self {
+impl<T> From<(u64, Result<T, ServerError>)> for OwnedServerMessage<T> {
+    fn from((id, result): (u64, Result<T, ServerError>)) -> Self {
         OwnedServerMessage::Response {
             id: id,
             result: result,
@@ -898,8 +884,8 @@ impl<T> From<Event> for OwnedServerMessage<T> {
     }
 }
 
-impl<T> From<DevToolsError> for OwnedServerMessage<T> {
-    fn from(error: DevToolsError) -> Self {
+impl<T> From<ServerError> for OwnedServerMessage<T> {
+    fn from(error: ServerError) -> Self {
         OwnedServerMessage::Error(error)
     }
 }
@@ -938,7 +924,7 @@ enum ServerMessageImpl<E, T1, T2> {
 }
 
 impl<'a, 'b, T> From<&'b ServerMessage<'a, T>>
-    for ServerMessageImpl<&'a DevToolsError, &'a T, &'a Event> {
+    for ServerMessageImpl<&'a ServerError, &'a T, &'a Event> {
     #[inline]
     fn from(message: &'b ServerMessage<'a, T>) -> Self {
         match *message {
@@ -965,7 +951,7 @@ impl<'a, 'b, T> From<&'b ServerMessage<'a, T>>
 }
 
 impl<'a, T> From<&'a OwnedServerMessage<T>>
-    for ServerMessageImpl<&'a DevToolsError, &'a T, &'a Event> {
+    for ServerMessageImpl<&'a ServerError, &'a T, &'a Event> {
     #[inline]
     fn from(message: &'a OwnedServerMessage<T>) -> Self {
         match *message {
@@ -993,9 +979,9 @@ impl<'a, T> From<&'a OwnedServerMessage<T>>
     }
 }
 
-impl<T> From<ServerMessageImpl<DevToolsError, T, Event>> for OwnedServerMessage<T> {
+impl<T> From<ServerMessageImpl<ServerError, T, Event>> for OwnedServerMessage<T> {
     #[inline]
-    fn from(message: ServerMessageImpl<DevToolsError, T, Event>) -> Self {
+    fn from(message: ServerMessageImpl<ServerError, T, Event>) -> Self {
         match message {
             ServerMessageImpl::GeneralFailure { error } => OwnedServerMessage::Error(error),
             ServerMessageImpl::CommandSuccess { id, response } => {
@@ -1016,19 +1002,19 @@ impl<T> From<ServerMessageImpl<DevToolsError, T, Event>> for OwnedServerMessage<
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct DevToolsError {
+pub struct ServerError {
     #[serde(rename = "code")]
-    pub kind: DevToolsErrorKind,
+    pub kind: ServerErrorKind,
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<Value>,
 }
 
-impl DevToolsError {
+impl ServerError {
     // https://github.com/nodejs/node/blob/8a8a6865c092637515b286cd9575ea592b5f501e/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L254
     pub fn invalid_json() -> Self {
-        DevToolsError {
-            kind: DevToolsErrorKind::ParseError,
+        ServerError {
+            kind: ServerErrorKind::ParseError,
             message: "Message must be a valid JSON".into(),
             data: None,
         }
@@ -1036,8 +1022,8 @@ impl DevToolsError {
 
     // https://github.com/nodejs/node/blob/8a8a6865c092637515b286cd9575ea592b5f501e/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L259
     pub fn must_be_object() -> Self {
-        DevToolsError {
-            kind: DevToolsErrorKind::InvalidRequest,
+        ServerError {
+            kind: ServerErrorKind::InvalidRequest,
             message: "Message must be an object".into(),
             data: None,
         }
@@ -1045,8 +1031,8 @@ impl DevToolsError {
 
     // https://github.com/nodejs/node/blob/8a8a6865c092637515b286cd9575ea592b5f501e/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L267
     pub fn must_have_id() -> Self {
-        DevToolsError {
-            kind: DevToolsErrorKind::InvalidRequest,
+        ServerError {
+            kind: ServerErrorKind::InvalidRequest,
             message: "Message must have integer 'id' porperty".into(), // not a typo
             data: None,
         }
@@ -1054,8 +1040,8 @@ impl DevToolsError {
 
     // https://github.com/nodejs/node/blob/8a8a6865c092637515b286cd9575ea592b5f501e/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L275
     pub fn must_have_method() -> Self {
-        DevToolsError {
-            kind: DevToolsErrorKind::InvalidRequest,
+        ServerError {
+            kind: ServerErrorKind::InvalidRequest,
             message: "Message must have string 'method' porperty".into(), // not a typo
             data: None,
         }
@@ -1065,8 +1051,8 @@ impl DevToolsError {
     pub fn method_not_found<S>(method: S) -> Self
         where S: AsRef<str>
     {
-        DevToolsError {
-            kind: DevToolsErrorKind::MethodNotFound,
+        ServerError {
+            kind: ServerErrorKind::MethodNotFound,
             message: format!("'{}' wasn't found", method.as_ref()),
             data: None,
         }
@@ -1076,8 +1062,8 @@ impl DevToolsError {
     pub fn invalid_parameters<S>(message: S) -> Self
         where S: AsRef<str>
     {
-        DevToolsError {
-            kind: DevToolsErrorKind::InvalidParams,
+        ServerError {
+            kind: ServerErrorKind::InvalidParams,
             message: "Invalid parameters".into(),
             data: Some(Value::String(message.as_ref().into())),
         }
@@ -1087,8 +1073,8 @@ impl DevToolsError {
     pub fn server_error<S>(message: S, data: Option<Value>) -> Self
         where S: AsRef<str>
     {
-        DevToolsError {
-            kind: DevToolsErrorKind::ServerError,
+        ServerError {
+            kind: ServerErrorKind::ServerError,
             message: message.as_ref().into(),
             data: data,
         }
@@ -1096,21 +1082,21 @@ impl DevToolsError {
 
     // https://github.com/nodejs/node/blob/8a8a6865c092637515b286cd9575ea592b5f501e/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L31-L39
     pub fn internal_error(data: Option<Value>) -> Self {
-        DevToolsError {
-            kind: DevToolsErrorKind::InternalError,
+        ServerError {
+            kind: ServerErrorKind::InternalError,
             message: "Internal error".into(),
             data: data,
         }
     }
 }
 
-impl Error for DevToolsError {
+impl Error for ServerError {
     fn description(&self) -> &str {
         "DevTools error"
     }
 }
 
-impl Display for DevToolsError {
+impl Display for ServerError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self.data {
             None => {
@@ -1134,7 +1120,7 @@ impl Display for DevToolsError {
 
 // https://github.com/nodejs/node/blob/e506bcd899b3530ec69bdc00d5bac469b5753081/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_h.template#L28-L35
 #[derive(Clone, Copy, Debug, Eq)]
-pub enum DevToolsErrorKind {
+pub enum ServerErrorKind {
     ParseError,
     InvalidRequest,
     MethodNotFound,
@@ -1144,55 +1130,55 @@ pub enum DevToolsErrorKind {
     Other(i32),
 }
 
-impl PartialEq for DevToolsErrorKind {
+impl PartialEq for ServerErrorKind {
     fn eq(&self, other: &Self) -> bool {
         i32::from(*self) == i32::from(*other)
     }
 }
 
-impl Display for DevToolsErrorKind {
+impl Display for ServerErrorKind {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
-            DevToolsErrorKind::ParseError => write!(f, "parse error"),
-            DevToolsErrorKind::InvalidRequest => write!(f, "invalid request"),
-            DevToolsErrorKind::MethodNotFound => write!(f, "method not found"),
-            DevToolsErrorKind::InvalidParams => write!(f, "invalid parameters"),
-            DevToolsErrorKind::InternalError => write!(f, "internal error"),
-            DevToolsErrorKind::ServerError => write!(f, "server error"),
-            DevToolsErrorKind::Other(code) => write!(f, "code {}", code),
+            ServerErrorKind::ParseError => write!(f, "parse error"),
+            ServerErrorKind::InvalidRequest => write!(f, "invalid request"),
+            ServerErrorKind::MethodNotFound => write!(f, "method not found"),
+            ServerErrorKind::InvalidParams => write!(f, "invalid parameters"),
+            ServerErrorKind::InternalError => write!(f, "internal error"),
+            ServerErrorKind::ServerError => write!(f, "server error"),
+            ServerErrorKind::Other(code) => write!(f, "code {}", code),
         }
     }
 }
 
-impl From<i32> for DevToolsErrorKind {
+impl From<i32> for ServerErrorKind {
     fn from(code: i32) -> Self {
         match code {
-            -32700 => DevToolsErrorKind::ParseError,
-            -32600 => DevToolsErrorKind::InvalidRequest,
-            -32601 => DevToolsErrorKind::MethodNotFound,
-            -32602 => DevToolsErrorKind::InvalidParams,
-            -32603 => DevToolsErrorKind::InternalError,
-            -32000 => DevToolsErrorKind::ServerError,
-            _ => DevToolsErrorKind::Other(code),
+            -32700 => ServerErrorKind::ParseError,
+            -32600 => ServerErrorKind::InvalidRequest,
+            -32601 => ServerErrorKind::MethodNotFound,
+            -32602 => ServerErrorKind::InvalidParams,
+            -32603 => ServerErrorKind::InternalError,
+            -32000 => ServerErrorKind::ServerError,
+            _ => ServerErrorKind::Other(code),
         }
     }
 }
 
-impl From<DevToolsErrorKind> for i32 {
-    fn from(kind: DevToolsErrorKind) -> Self {
+impl From<ServerErrorKind> for i32 {
+    fn from(kind: ServerErrorKind) -> Self {
         match kind {
-            DevToolsErrorKind::ParseError => -32700,
-            DevToolsErrorKind::InvalidRequest => -32600,
-            DevToolsErrorKind::MethodNotFound => -32601,
-            DevToolsErrorKind::InvalidParams => -32602,
-            DevToolsErrorKind::InternalError => -32603,
-            DevToolsErrorKind::ServerError => -32000,
-            DevToolsErrorKind::Other(code) => code,
+            ServerErrorKind::ParseError => -32700,
+            ServerErrorKind::InvalidRequest => -32600,
+            ServerErrorKind::MethodNotFound => -32601,
+            ServerErrorKind::InvalidParams => -32602,
+            ServerErrorKind::InternalError => -32603,
+            ServerErrorKind::ServerError => -32000,
+            ServerErrorKind::Other(code) => code,
         }
     }
 }
 
-impl Serialize for DevToolsErrorKind {
+impl Serialize for ServerErrorKind {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where S: Serializer
     {
@@ -1200,12 +1186,10 @@ impl Serialize for DevToolsErrorKind {
     }
 }
 
-impl<'de> Deserialize<'de> for DevToolsErrorKind {
+impl<'de> Deserialize<'de> for ServerErrorKind {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where D: Deserializer<'de>
     {
         Ok(i32::deserialize(deserializer)?.into())
     }
 }
-
-include!(concat!(env!("OUT_DIR"), "/websocket.rs"));
