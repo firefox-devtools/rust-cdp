@@ -8,7 +8,7 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::mem;
 
-pub use serde_json::Value;
+pub use serde_json::{Map, Value};
 
 #[macro_export]
 macro_rules! cdp_websocket_devtools_path {
@@ -129,6 +129,10 @@ impl OwnedClientMessage {
     pub fn parse_incoming<'de, D>(deserializer: D) -> Result<Self, (DevToolsError, Option<u64>)>
         where D: Deserializer<'de>
     {
+        lazy_static! {
+            static ref DEFAULT_PARAMS: Value = Value::Object(Map::new());
+        }
+
         let value =
             Value::deserialize(deserializer).map_err(|_| (DevToolsError::invalid_json(), None))?;
         let obj = value.as_object().ok_or_else(|| (DevToolsError::must_be_object(), None))?;
@@ -138,8 +142,7 @@ impl OwnedClientMessage {
         let method = obj.get("method")
             .and_then(Value::as_str)
             .ok_or_else(|| (DevToolsError::must_have_method(), Some(id)))?;
-        let default_params = Value::Null;
-        let params = obj.get("params").unwrap_or(&default_params);
+        let params = obj.get("params").unwrap_or_else(|| &*DEFAULT_PARAMS);
         let command = Command::parse_command(method, params)
             .ok_or_else(|| (DevToolsError::method_not_found(method), Some(id)))?
             .map_err(|e| (DevToolsError::invalid_parameters(e.to_string()), Some(id)))?;
