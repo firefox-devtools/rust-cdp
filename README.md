@@ -6,7 +6,7 @@
 [![Linux/OSX Build Status](https://img.shields.io/travis/devtools-html/cdp/master.svg)](https://travis-ci.org/devtools-html/cdp)
 [![Windows Build Status](https://img.shields.io/appveyor/ci/spinda/cdp/master.svg)](https://ci.appveyor.com/project/spinda/cdp)
 
-~~[Documentation](https://docs.rs/cdp/0.0.0)~~
+[Documentation](https://www.spinda.net/files/mozilla/cdp/doc/cdp/index.html)
 
 ## Usage
 
