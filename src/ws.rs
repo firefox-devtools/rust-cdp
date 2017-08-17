@@ -135,7 +135,7 @@ impl OwnedClientMessage {
         let params = obj.get("params").unwrap_or_else(|| &*DEFAULT_PARAMS);
         let command = Command::parse_command(method, params)
             .ok_or_else(|| (ServerError::method_not_found(method), Some(id)))?
-            .map_err(|e| (ServerError::invalid_parameters(e.to_string()), Some(id)))?;
+            .map_err(|e| (ServerError::invalid_parameters(&e.to_string()), Some(id)))?;
         Ok(OwnedClientMessage {
             id: id,
             command: command,
@@ -1048,34 +1048,28 @@ impl ServerError {
     }
 
     // https://github.com/nodejs/node/blob/8a8a6865c092637515b286cd9575ea592b5f501e/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L283
-    pub fn method_not_found<S>(method: S) -> Self
-        where S: AsRef<str>
-    {
+    pub fn method_not_found(method: &str) -> Self {
         ServerError {
             kind: ServerErrorKind::MethodNotFound,
-            message: format!("'{}' wasn't found", method.as_ref()),
+            message: format!("'{}' wasn't found", method),
             data: None,
         }
     }
 
     // https://github.com/nodejs/node/blob/d74a545535868380b028c27dfcdf54e2d5f7c563/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L61
-    pub fn invalid_parameters<S>(message: S) -> Self
-        where S: AsRef<str>
-    {
+    pub fn invalid_parameters(message: &str) -> Self {
         ServerError {
             kind: ServerErrorKind::InvalidParams,
             message: "Invalid parameters".into(),
-            data: Some(Value::String(message.as_ref().into())),
+            data: Some(Value::String(message.into())),
         }
     }
 
     // https://github.com/nodejs/node/blob/d74a545535868380b028c27dfcdf54e2d5f7c563/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L21-L29
-    pub fn server_error<S>(message: S, data: Option<Value>) -> Self
-        where S: AsRef<str>
-    {
+    pub fn server_error(message: &str, data: Option<Value>) -> Self {
         ServerError {
             kind: ServerErrorKind::ServerError,
-            message: message.as_ref().into(),
+            message: message.into(),
             data: data,
         }
     }

@@ -351,16 +351,12 @@ pub struct DevToolsUrls {
 }
 
 impl DevToolsUrls {
-    pub fn new<S>(addr: &SocketAddr, page_id: S) -> Self
-        where S: AsRef<str>
-    {
+    pub fn new(addr: &SocketAddr, page_id: &str) -> Self {
         DevToolsUrls {
-            ws_url: format!(cdp_ws_url_format!(),
-                            server_addr = addr,
-                            page_id = page_id.as_ref()),
+            ws_url: format!(cdp_ws_url_format!(), server_addr = addr, page_id = page_id),
             frontend_url: format!(cdp_frontend_url_format!(),
                                   server_addr = addr,
-                                  page_id = page_id.as_ref()),
+                                  page_id = page_id),
         }
     }
 }
