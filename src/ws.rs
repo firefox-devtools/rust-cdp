@@ -2,6 +2,9 @@
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at http://mozilla.org/MPL/2.0/.
 
+// Broken lint (fires on Result::map when Result::cloned doesn't exist)
+#![cfg_attr(feature = "cargo-clippy", allow(map_clone))]
+
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{self, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, Visitor};
@@ -197,7 +200,7 @@ impl<'de> Deserialize<'de> for OwnedClientMessage {
             inner: deserializer,
         })?;
         Ok(OwnedClientMessage {
-            id: id.ok_or(de::Error::missing_field("id"))?,
+            id: id.ok_or_else(|| de::Error::missing_field("id"))?,
             command: command,
         })
     }
@@ -825,6 +828,8 @@ impl<'a, T> Serialize for ServerMessage<'a, T>
     }
 }
 
+// TODO: Review this later
+#[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 #[derive(Clone, Debug, PartialEq)]
 pub enum OwnedServerMessage<T = Value> {
     Response {
@@ -1145,6 +1150,7 @@ impl Display for ServerErrorKind {
 }
 
 impl From<i32> for ServerErrorKind {
+    #[cfg_attr(feature = "cargo-clippy", allow(unreadable_literal))]
     fn from(code: i32) -> Self {
         match code {
             -32700 => ServerErrorKind::ParseError,
@@ -1159,6 +1165,7 @@ impl From<i32> for ServerErrorKind {
 }
 
 impl From<ServerErrorKind> for i32 {
+    #[cfg_attr(feature = "cargo-clippy", allow(unreadable_literal))]
     fn from(kind: ServerErrorKind) -> Self {
         match kind {
             ServerErrorKind::ParseError => -32700,

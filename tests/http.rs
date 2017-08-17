@@ -141,39 +141,39 @@ fn test_command_missing_slash() {
 
 #[test]
 fn test_command_version_info() {
-    do_test_command("json/version", None, OwnedCommand::VersionInfo);
+    do_test_command("json/version", None, &OwnedCommand::VersionInfo);
 }
 
 #[test]
 fn test_command_page_list() {
-    do_test_command("json/list", None, OwnedCommand::PageList);
-    do_test_command("json", None, OwnedCommand::PageList);
+    do_test_command("json/list", None, &OwnedCommand::PageList);
+    do_test_command("json", None, &OwnedCommand::PageList);
 }
 
 #[test]
 fn test_command_new_page() {
-    do_test_command("json/new", None, OwnedCommand::NewPage(None));
+    do_test_command("json/new", None, &OwnedCommand::NewPage(None));
     do_test_command("json/new",
                     Some("https://www.mozilla.org"),
-                    OwnedCommand::NewPage(Some("https://www.mozilla.org".into())));
+                    &OwnedCommand::NewPage(Some("https://www.mozilla.org".into())));
 }
 
 #[test]
 fn test_command_activate_page() {
     do_test_command("json/activate/0",
                     None,
-                    OwnedCommand::ActivatePage("0".into()));
+                    &OwnedCommand::ActivatePage("0".into()));
     do_test_command("json/activate/0/",
                     None,
-                    OwnedCommand::ActivatePage("0/".into()));
+                    &OwnedCommand::ActivatePage("0/".into()));
     do_test_command("json/activate/0/foo",
                     None,
-                    OwnedCommand::ActivatePage("0/foo".into()));
+                    &OwnedCommand::ActivatePage("0/foo".into()));
 }
 
-fn do_test_command(path: &str, query: Option<&str>, owned_command: OwnedCommand) {
-    let borrowed_command = Command::from(&owned_command);
-    assert_eq!(OwnedCommand::from(&borrowed_command), owned_command);
+fn do_test_command(path: &str, query: Option<&str>, owned_command: &OwnedCommand) {
+    let borrowed_command = Command::from(owned_command);
+    assert_eq!(&OwnedCommand::from(&borrowed_command), owned_command);
 
     let borrowed_parsed_command = Command::parse(path, query)
         .expect("borrowed command parse error");
@@ -192,8 +192,8 @@ fn do_test_command(path: &str, query: Option<&str>, owned_command: OwnedCommand)
         OwnedCommand::parse_with_slash(format!("/{}", path).as_str(), query)
             .expect("owned command parse with slash error");
 
-    assert_eq!(owned_command, owned_parsed_command);
-    assert_eq!(owned_command, owned_parsed_command_with_slash);
+    assert_eq!(owned_command, &owned_parsed_command);
+    assert_eq!(owned_command, &owned_parsed_command_with_slash);
     assert_eq!(owned_parsed_command, owned_parsed_command_with_slash);
 }
 

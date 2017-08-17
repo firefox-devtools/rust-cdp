@@ -1,5 +1,8 @@
 #![allow(deprecated)]
 
+// TODO: Review this later
+#![cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
+
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use ws::*;

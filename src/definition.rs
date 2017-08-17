@@ -26,7 +26,7 @@ impl<'de> Deserialize<'de> for Definition {
         where D: Deserializer<'de>
     {
         let def = DefinitionImpl::deserialize(deserializer)?;
-        def.to_definition()
+        def.into_definition()
     }
 }
 
@@ -69,7 +69,7 @@ impl<'de> Deserialize<'de> for Domain {
         where D: Deserializer<'de>
     {
         let domain = DomainImpl::deserialize(deserializer)?;
-        domain.to_domain()
+        domain.into_domain()
     }
 }
 
@@ -113,7 +113,7 @@ impl<'de> Deserialize<'de> for TypeDef {
         where D: Deserializer<'de>
     {
         let type_def = TypeDefImpl::deserialize(deserializer)?;
-        type_def.to_type_def()
+        type_def.into_type_def()
     }
 }
 
@@ -143,7 +143,7 @@ impl<'de> Deserialize<'de> for Method {
         where D: Deserializer<'de>
     {
         let method = MethodImpl::deserialize(deserializer)?;
-        method.to_method()
+        method.into_method()
     }
 }
 
@@ -171,7 +171,7 @@ impl<'de> Deserialize<'de> for Field {
         where D: Deserializer<'de>
     {
         let field = FieldImpl::deserialize(deserializer)?;
-        field.to_field()
+        field.into_field()
     }
 }
 
@@ -195,7 +195,7 @@ impl<'de> Deserialize<'de> for Item {
         where D: Deserializer<'de>
     {
         let item = ItemImpl::deserialize(deserializer)?;
-        item.to_item()
+        item.into_item()
     }
 }
 
@@ -207,12 +207,12 @@ struct DefinitionImpl {
 }
 
 impl DefinitionImpl {
-    fn to_definition<E>(self) -> Result<Definition, E>
+    fn into_definition<E>(self) -> Result<Definition, E>
         where E: de::Error
     {
         Ok(Definition {
             version: self.version,
-            domains: self.domains.into_iter().map(DomainImpl::to_domain).collect::<Result<_, _>>()?,
+            domains: self.domains.into_iter().map(DomainImpl::into_domain).collect::<Result<_, _>>()?,
         })
     }
 }
@@ -248,7 +248,7 @@ struct DomainImpl {
 }
 
 impl DomainImpl {
-    fn to_domain<E>(self) -> Result<Domain, E>
+    fn into_domain<E>(self) -> Result<Domain, E>
         where E: de::Error
     {
         Ok(Domain {
@@ -259,13 +259,13 @@ impl DomainImpl {
             dependencies: self.dependencies,
             type_defs: self.type_defs
                 .into_iter()
-                .map(TypeDefImpl::to_type_def)
+                .map(TypeDefImpl::into_type_def)
                 .collect::<Result<_, _>>()?,
             commands: self.commands
                 .into_iter()
-                .map(MethodImpl::to_method)
+                .map(MethodImpl::into_method)
                 .collect::<Result<_, _>>()?,
-            events: self.events.into_iter().map(MethodImpl::to_method).collect::<Result<_, _>>()?,
+            events: self.events.into_iter().map(MethodImpl::into_method).collect::<Result<_, _>>()?,
         })
     }
 }
@@ -313,7 +313,7 @@ struct TypeDefImpl {
 }
 
 impl TypeDefImpl {
-    fn to_type_def<E>(self) -> Result<TypeDef, E>
+    fn into_type_def<E>(self) -> Result<TypeDef, E>
         where E: de::Error
     {
         let ty = TypeImpl {
@@ -324,7 +324,7 @@ impl TypeDefImpl {
                 min_items: self.min_items,
                 max_items: self.max_items,
                 properties: self.properties,
-            }.to_type(self.name.as_str())?;
+            }.into_type(self.name.as_str())?;
 
         Ok(TypeDef {
             name: self.name,
@@ -376,7 +376,7 @@ struct MethodImpl {
 }
 
 impl MethodImpl {
-    fn to_method<E>(self) -> Result<Method, E>
+    fn into_method<E>(self) -> Result<Method, E>
         where E: de::Error
     {
         Ok(Method {
@@ -387,9 +387,9 @@ impl MethodImpl {
             handlers: self.handlers,
             parameters: self.parameters
                 .into_iter()
-                .map(FieldImpl::to_field)
+                .map(FieldImpl::into_field)
                 .collect::<Result<_, _>>()?,
-            returns: self.returns.into_iter().map(FieldImpl::to_field).collect::<Result<_, _>>()?,
+            returns: self.returns.into_iter().map(FieldImpl::into_field).collect::<Result<_, _>>()?,
             redirect: self.redirect,
         })
     }
@@ -439,7 +439,7 @@ struct FieldImpl {
 }
 
 impl FieldImpl {
-    fn to_field<E>(self) -> Result<Field, E>
+    fn into_field<E>(self) -> Result<Field, E>
         where E: de::Error
     {
         let ty = TypeImpl {
@@ -450,7 +450,7 @@ impl FieldImpl {
                 min_items: self.min_items,
                 max_items: self.max_items,
                 properties: self.properties,
-            }.to_type(self.name.as_str())?;
+            }.into_type(self.name.as_str())?;
 
         Ok(Field {
             name: self.name,
@@ -505,7 +505,7 @@ struct ItemImpl {
 }
 
 impl ItemImpl {
-    fn to_item<E>(self) -> Result<Item, E>
+    fn into_item<E>(self) -> Result<Item, E>
         where E: de::Error
     {
         let ty = TypeImpl {
@@ -520,7 +520,7 @@ impl ItemImpl {
 
         Ok(Item {
             description: self.description,
-            ty: ty.to_type("array item")?,
+            ty: ty.into_type("array item")?,
         })
     }
 }
@@ -572,7 +572,7 @@ struct TypeImpl {
 }
 
 impl TypeImpl {
-    fn to_type<E>(self, name: &str) -> Result<Type, E>
+    fn into_type<E>(self, name: &str) -> Result<Type, E>
         where E: de::Error
     {
         if let Some(target) = self.reference {
@@ -599,7 +599,7 @@ impl TypeImpl {
                         }
                         Some(item) => {
                             Ok(Type::Array {
-                                item: Box::new(item.to_item()?),
+                                item: Box::new(item.into_item()?),
                                 min_items: self.min_items,
                                 max_items: self.max_items,
                             })
@@ -611,7 +611,7 @@ impl TypeImpl {
                         None => Ok(Type::Object(vec![])),
                         Some(properties) => {
                             Ok(Type::Object(properties.into_iter()
-                                .map(FieldImpl::to_field)
+                                .map(FieldImpl::into_field)
                                 .collect::<Result<_, _>>()?))
                         }
                     }
@@ -699,8 +699,8 @@ impl<'a> From<&'a Type> for TypeImpl {
                 TypeImpl {
                     primitive: Some(Primitive::Array),
                     item: Some(item.as_ref().into()),
-                    min_items: min_items.clone(),
-                    max_items: max_items.clone(),
+                    min_items: *min_items,
+                    max_items: *max_items,
                     reference: None,
                     enum_values: None,
                     properties: None,

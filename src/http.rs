@@ -31,9 +31,9 @@ pub struct VersionInfo {
 fn serialize_component_version<S>(value: &Option<String>, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer
 {
-    match value {
-        &None => "0".serialize(serializer),
-        &Some(ref version) => version.serialize(serializer),
+    match *value {
+        None => "0".serialize(serializer),
+        Some(ref version) => version.serialize(serializer),
     }
 }
 
@@ -316,10 +316,10 @@ impl<'de> Deserialize<'de> for Page {
                     description: description,
                     devtools_urls: devtools_urls,
                     favicon_url: favicon_url,
-                    id: id.ok_or(de::Error::missing_field("id"))?,
-                    title: title.ok_or(de::Error::missing_field("title"))?,
-                    ty: ty.ok_or(de::Error::missing_field("type"))?,
-                    url: url.ok_or(de::Error::missing_field("url"))?,
+                    id: id.ok_or_else(|| de::Error::missing_field("id"))?,
+                    title: title.ok_or_else(|| de::Error::missing_field("title"))?,
+                    ty: ty.ok_or_else(|| de::Error::missing_field("type"))?,
+                    url: url.ok_or_else(|| de::Error::missing_field("url"))?,
                 })
             }
         }
@@ -580,9 +580,7 @@ pub enum Response {
 impl Response {
     pub fn status(&self) -> u16 {
         match *self {
-            Response::VersionInfo(..) => 200,
-            Response::PageList(..) => 200,
-            Response::NewPage(..) => 200,
+            Response::VersionInfo(..) | Response::PageList(..) | Response::NewPage(..) => 200,
             Response::ActivatePage(activated) => if activated { 200 } else { 404 },
         }
     }
