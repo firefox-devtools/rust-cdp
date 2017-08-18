@@ -8,7 +8,7 @@ keywords = ["chrome", "devtools", "dev", "tools", "protocol", "cdp", "client",
             "server", "chromium"]
 repository = "https://github.com/devtools-html/cdp"
 homepage = "https://github.com/devtools-html/cdp"
-documentation = "https://docs.rs/devtools-html/0.1.0"
+documentation = "https://docs.rs/cdp/0.1.0"
 description = """
 Chrome DevTools Protocol types and (de)serialization for Rust
 """
