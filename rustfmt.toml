@@ -1,0 +1,30 @@
+# tweak line wrapping behavior
+max_width = 99
+array_width = 99
+chain_one_line_max = 99
+comment_width = 80
+fn_call_width = 99
+
+# format comments
+normalize_comments = true
+wrap_comments = true
+error_on_line_overflow_comments = false
+
+# order imports
+reorder_imported_names = true
+reorder_imports = true
+reorder_imports_in_group = true
+
+# ensure strings are properly wrapped
+format_strings = true
+force_format_strings = true
+
+# ensure consistent attribute placement
+attributes_on_same_line_as_field = false
+attributes_on_same_line_as_variant = false
+
+# prefer ? over try!
+use_try_shorthand = true
+
+# prevent accidentally formatting more than the intended file(s)
+skip_children = true

@@ -29,7 +29,8 @@ pub struct VersionInfo {
 }
 
 fn serialize_component_version<S>(value: &Option<String>, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer
+where
+    S: Serializer,
 {
     match *value {
         None => "0".serialize(serializer),
@@ -38,7 +39,8 @@ fn serialize_component_version<S>(value: &Option<String>, serializer: S) -> Resu
 }
 
 fn deserialize_component_version<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-    where D: Deserializer<'de>
+where
+    D: Deserializer<'de>,
 {
     let value = Option::<String>::deserialize(deserializer)?;
     Ok(value.and_then(|version| if version == "0" { None } else { Some(version) }))
@@ -57,12 +59,15 @@ pub struct Page {
 
 impl Serialize for Page {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
+    where
+        S: Serializer,
     {
         let mut state = serializer.serialize_struct("Page", 8)?;
 
-        state.serialize_field("description",
-                             self.description.as_ref().map(String::as_str).unwrap_or(""))?;
+        state.serialize_field(
+            "description",
+            self.description.as_ref().map(String::as_str).unwrap_or(""),
+        )?;
 
         if let Some(ref urls) = self.devtools_urls {
             state.serialize_field("devtoolsFrontendUrl", &urls.frontend_url)?;
@@ -87,7 +92,8 @@ impl Serialize for Page {
 
 impl<'de> Deserialize<'de> for Page {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         enum Field {
             Description,
@@ -111,7 +117,8 @@ impl<'de> Deserialize<'de> for Page {
             }
 
             fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-                where E: de::Error
+            where
+                E: de::Error,
             {
                 match value {
                     "description" => Ok(Field::Description),
@@ -127,7 +134,8 @@ impl<'de> Deserialize<'de> for Page {
             }
 
             fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
-                where E: de::Error
+            where
+                E: de::Error,
             {
                 match value {
                     b"description" => Ok(Field::Description),
@@ -146,7 +154,8 @@ impl<'de> Deserialize<'de> for Page {
         impl<'de> Deserialize<'de> for Field {
             #[inline]
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-                where D: Deserializer<'de>
+            where
+                D: Deserializer<'de>,
             {
                 deserializer.deserialize_identifier(FieldVisitor)
             }
@@ -163,7 +172,8 @@ impl<'de> Deserialize<'de> for Page {
 
             #[inline]
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-                where A: SeqAccess<'de>
+            where
+                A: SeqAccess<'de>,
             {
                 let description = match seq.next_element::<Option<String>>()? {
                     Some(value) => {
@@ -209,14 +219,14 @@ impl<'de> Deserialize<'de> for Page {
 
                 let devtools_urls = match (ws_url, frontend_url) {
                     (None, None) => None,
-                    (Some(ws_url), Some(frontend_url)) => {
-                        Some(DevToolsUrls {
-                            ws_url: ws_url,
-                            frontend_url: frontend_url,
-                        })
-                    }
+                    (Some(ws_url), Some(frontend_url)) => Some(DevToolsUrls {
+                        ws_url: ws_url,
+                        frontend_url: frontend_url,
+                    }),
                     (None, Some(_)) => return Err(de::Error::missing_field("devtoolsFrontendUrl")),
-                    (Some(_), None) => return Err(de::Error::missing_field("webSocketDebuggerUrl")),
+                    (Some(_), None) => {
+                        return Err(de::Error::missing_field("webSocketDebuggerUrl"))
+                    }
                 };
 
                 Ok(Page {
@@ -232,7 +242,8 @@ impl<'de> Deserialize<'de> for Page {
 
             #[inline]
             fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-                where A: MapAccess<'de>
+            where
+                A: MapAccess<'de>,
             {
                 let mut description: Option<String> = None;
                 let mut frontend_url: Option<String> = None;
@@ -302,14 +313,14 @@ impl<'de> Deserialize<'de> for Page {
 
                 let devtools_urls = match (ws_url, frontend_url) {
                     (None, None) => None,
-                    (Some(ws_url), Some(frontend_url)) => {
-                        Some(DevToolsUrls {
-                            ws_url: ws_url,
-                            frontend_url: frontend_url,
-                        })
-                    }
+                    (Some(ws_url), Some(frontend_url)) => Some(DevToolsUrls {
+                        ws_url: ws_url,
+                        frontend_url: frontend_url,
+                    }),
                     (None, Some(_)) => return Err(de::Error::missing_field("devtoolsFrontendUrl")),
-                    (Some(_), None) => return Err(de::Error::missing_field("webSocketDebuggerUrl")),
+                    (Some(_), None) => {
+                        return Err(de::Error::missing_field("webSocketDebuggerUrl"))
+                    }
                 };
 
                 Ok(Page {
@@ -324,14 +335,16 @@ impl<'de> Deserialize<'de> for Page {
             }
         }
 
-        const FIELDS: &'static [&'static str] = &["description",
-                                                  "devtoolsFrontendUrl",
-                                                  "faviconUrl",
-                                                  "id",
-                                                  "title",
-                                                  "type",
-                                                  "url",
-                                                  "webSocketDebuggerUrl"];
+        const FIELDS: &'static [&'static str] = &[
+            "description",
+            "devtoolsFrontendUrl",
+            "faviconUrl",
+            "id",
+            "title",
+            "type",
+            "url",
+            "webSocketDebuggerUrl",
+        ];
 
         deserializer.deserialize_struct("Page", FIELDS, PageVisitor(PhantomData))
     }
@@ -354,9 +367,11 @@ impl DevToolsUrls {
     pub fn new(addr: &SocketAddr, page_id: &str) -> Self {
         DevToolsUrls {
             ws_url: format!(cdp_ws_url_format!(), server_addr = addr, page_id = page_id),
-            frontend_url: format!(cdp_frontend_url_format!(),
-                                  server_addr = addr,
-                                  page_id = page_id),
+            frontend_url: format!(
+                cdp_frontend_url_format!(),
+                server_addr = addr,
+                page_id = page_id
+            ),
         }
     }
 }
@@ -377,15 +392,17 @@ pub enum PageType {
 
 impl Display for PageType {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f,
-               "{}",
-               match *self {
-                   PageType::Tab => "tab",
-                   PageType::Background => "background page",
-                   PageType::ServiceWorker => "service worker",
-                   PageType::App => "app",
-                   PageType::Other => "other page",
-               })
+        write!(
+            f,
+            "{}",
+            match *self {
+                PageType::Tab => "tab",
+                PageType::Background => "background page",
+                PageType::ServiceWorker => "service worker",
+                PageType::App => "app",
+                PageType::Other => "other page",
+            }
+        )
     }
 }
 
@@ -498,24 +515,20 @@ impl<'a> Command<'a> {
                     .expect("cdp: HTTP_PATH_RE compilation failed");
         }
 
-        HTTP_PATH_RE.captures(path).and_then(move |captures| {
-            match captures.get(2) {
-                None => Some(Command::PageList),
-                Some(command) => {
-                    match command.as_str() {
-                        cdp_http_version_info_slug!() => Some(Command::VersionInfo),
-                        cdp_http_page_list_slug!() => Some(Command::PageList),
-                        cdp_http_new_page_slug!() => Some(Command::NewPage(query)),
-                        cdp_http_activate_page_slug!() => {
-                            Some(Command::ActivatePage(match captures.get(4) {
-                                None => "",
-                                Some(url) => url.as_str(),
-                            }))
-                        }
-                        _ => None,
-                    }
+        HTTP_PATH_RE.captures(path).and_then(move |captures| match captures.get(2) {
+            None => Some(Command::PageList),
+            Some(command) => match command.as_str() {
+                cdp_http_version_info_slug!() => Some(Command::VersionInfo),
+                cdp_http_page_list_slug!() => Some(Command::PageList),
+                cdp_http_new_page_slug!() => Some(Command::NewPage(query)),
+                cdp_http_activate_page_slug!() => {
+                    Some(Command::ActivatePage(match captures.get(4) {
+                        None => "",
+                        Some(url) => url.as_str(),
+                    }))
                 }
-            }
+                _ => None,
+            },
         })
     }
 
@@ -581,7 +594,11 @@ impl Response {
     pub fn status(&self) -> u16 {
         match *self {
             Response::VersionInfo(..) | Response::PageList(..) | Response::NewPage(..) => 200,
-            Response::ActivatePage(activated) => if activated { 200 } else { 404 },
+            Response::ActivatePage(activated) => if activated {
+                200
+            } else {
+                404
+            },
         }
     }
 }

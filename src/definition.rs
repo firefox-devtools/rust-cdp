@@ -14,7 +14,8 @@ pub struct Definition {
 
 impl Serialize for Definition {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
+    where
+        S: Serializer,
     {
         let def = DefinitionImpl::from(self);
         def.serialize(serializer)
@@ -23,7 +24,8 @@ impl Serialize for Definition {
 
 impl<'de> Deserialize<'de> for Definition {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         let def = DefinitionImpl::deserialize(deserializer)?;
         def.into_definition()
@@ -57,7 +59,8 @@ pub struct Domain {
 
 impl Serialize for Domain {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
+    where
+        S: Serializer,
     {
         let domain = DomainImpl::from(self);
         domain.serialize(serializer)
@@ -66,7 +69,8 @@ impl Serialize for Domain {
 
 impl<'de> Deserialize<'de> for Domain {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         let domain = DomainImpl::deserialize(deserializer)?;
         domain.into_domain()
@@ -101,7 +105,8 @@ pub struct TypeDef {
 
 impl Serialize for TypeDef {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
+    where
+        S: Serializer,
     {
         let type_def = TypeDefImpl::from(self);
         type_def.serialize(serializer)
@@ -110,7 +115,8 @@ impl Serialize for TypeDef {
 
 impl<'de> Deserialize<'de> for TypeDef {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         let type_def = TypeDefImpl::deserialize(deserializer)?;
         type_def.into_type_def()
@@ -131,7 +137,8 @@ pub struct Method {
 
 impl Serialize for Method {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
+    where
+        S: Serializer,
     {
         let method = MethodImpl::from(self);
         method.serialize(serializer)
@@ -140,7 +147,8 @@ impl Serialize for Method {
 
 impl<'de> Deserialize<'de> for Method {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         let method = MethodImpl::deserialize(deserializer)?;
         method.into_method()
@@ -159,7 +167,8 @@ pub struct Field {
 
 impl Serialize for Field {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
+    where
+        S: Serializer,
     {
         let field = FieldImpl::from(self);
         field.serialize(serializer)
@@ -168,7 +177,8 @@ impl Serialize for Field {
 
 impl<'de> Deserialize<'de> for Field {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         let field = FieldImpl::deserialize(deserializer)?;
         field.into_field()
@@ -183,7 +193,8 @@ pub struct Item {
 
 impl Serialize for Item {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
+    where
+        S: Serializer,
     {
         let item = ItemImpl::from(self);
         item.serialize(serializer)
@@ -192,7 +203,8 @@ impl Serialize for Item {
 
 impl<'de> Deserialize<'de> for Item {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         let item = ItemImpl::deserialize(deserializer)?;
         item.into_item()
@@ -208,11 +220,15 @@ struct DefinitionImpl {
 
 impl DefinitionImpl {
     fn into_definition<E>(self) -> Result<Definition, E>
-        where E: de::Error
+    where
+        E: de::Error,
     {
         Ok(Definition {
             version: self.version,
-            domains: self.domains.into_iter().map(DomainImpl::into_domain).collect::<Result<_, _>>()?,
+            domains: self.domains
+                .into_iter()
+                .map(DomainImpl::into_domain)
+                .collect::<Result<_, _>>()?,
         })
     }
 }
@@ -249,7 +265,8 @@ struct DomainImpl {
 
 impl DomainImpl {
     fn into_domain<E>(self) -> Result<Domain, E>
-        where E: de::Error
+    where
+        E: de::Error,
     {
         Ok(Domain {
             name: self.name,
@@ -265,7 +282,8 @@ impl DomainImpl {
                 .into_iter()
                 .map(MethodImpl::into_method)
                 .collect::<Result<_, _>>()?,
-            events: self.events.into_iter().map(MethodImpl::into_method).collect::<Result<_, _>>()?,
+            events:
+                self.events.into_iter().map(MethodImpl::into_method).collect::<Result<_, _>>()?,
         })
     }
 }
@@ -314,17 +332,18 @@ struct TypeDefImpl {
 
 impl TypeDefImpl {
     fn into_type_def<E>(self) -> Result<TypeDef, E>
-        where E: de::Error
+    where
+        E: de::Error,
     {
         let ty = TypeImpl {
-                reference: self.reference,
-                primitive: self.primitive,
-                enum_values: self.enum_values,
-                item: self.item,
-                min_items: self.min_items,
-                max_items: self.max_items,
-                properties: self.properties,
-            }.into_type(self.name.as_str())?;
+            reference: self.reference,
+            primitive: self.primitive,
+            enum_values: self.enum_values,
+            item: self.item,
+            min_items: self.min_items,
+            max_items: self.max_items,
+            properties: self.properties,
+        }.into_type(self.name.as_str())?;
 
         Ok(TypeDef {
             name: self.name,
@@ -377,7 +396,8 @@ struct MethodImpl {
 
 impl MethodImpl {
     fn into_method<E>(self) -> Result<Method, E>
-        where E: de::Error
+    where
+        E: de::Error,
     {
         Ok(Method {
             name: self.name,
@@ -389,7 +409,8 @@ impl MethodImpl {
                 .into_iter()
                 .map(FieldImpl::into_field)
                 .collect::<Result<_, _>>()?,
-            returns: self.returns.into_iter().map(FieldImpl::into_field).collect::<Result<_, _>>()?,
+            returns:
+                self.returns.into_iter().map(FieldImpl::into_field).collect::<Result<_, _>>()?,
             redirect: self.redirect,
         })
     }
@@ -440,17 +461,18 @@ struct FieldImpl {
 
 impl FieldImpl {
     fn into_field<E>(self) -> Result<Field, E>
-        where E: de::Error
+    where
+        E: de::Error,
     {
         let ty = TypeImpl {
-                reference: self.reference,
-                primitive: self.primitive,
-                enum_values: self.enum_values,
-                item: self.item,
-                min_items: self.min_items,
-                max_items: self.max_items,
-                properties: self.properties,
-            }.into_type(self.name.as_str())?;
+            reference: self.reference,
+            primitive: self.primitive,
+            enum_values: self.enum_values,
+            item: self.item,
+            min_items: self.min_items,
+            max_items: self.max_items,
+            properties: self.properties,
+        }.into_type(self.name.as_str())?;
 
         Ok(Field {
             name: self.name,
@@ -506,7 +528,8 @@ struct ItemImpl {
 
 impl ItemImpl {
     fn into_item<E>(self) -> Result<Item, E>
-        where E: de::Error
+    where
+        E: de::Error,
     {
         let ty = TypeImpl {
             reference: self.reference,
@@ -573,7 +596,8 @@ struct TypeImpl {
 
 impl TypeImpl {
     fn into_type<E>(self, name: &str) -> Result<Type, E>
-        where E: de::Error
+    where
+        E: de::Error,
     {
         if let Some(target) = self.reference {
             return Ok(Type::Reference(target));
@@ -584,150 +608,125 @@ impl TypeImpl {
                 Primitive::Boolean => Ok(Type::Boolean),
                 Primitive::Integer => Ok(Type::Integer),
                 Primitive::Number => Ok(Type::Number),
-                Primitive::String => {
-                    match self.enum_values {
-                        None => Ok(Type::String),
-                        Some(values) => Ok(Type::Enum(values)),
-                    }
-                }
-                Primitive::Array => {
-                    match self.item {
-                        None => {
-                            Err(de::Error::custom(format!("'items' key not found in array type \
-                                                           descriptor for '{}'",
-                                                          name)))
-                        }
-                        Some(item) => {
-                            Ok(Type::Array {
-                                item: Box::new(item.into_item()?),
-                                min_items: self.min_items,
-                                max_items: self.max_items,
-                            })
-                        }
-                    }
-                }
-                Primitive::Object => {
-                    match self.properties {
-                        None => Ok(Type::Object(vec![])),
-                        Some(properties) => {
-                            Ok(Type::Object(properties.into_iter()
-                                .map(FieldImpl::into_field)
-                                .collect::<Result<_, _>>()?))
-                        }
-                    }
-                }
+                Primitive::String => match self.enum_values {
+                    None => Ok(Type::String),
+                    Some(values) => Ok(Type::Enum(values)),
+                },
+                Primitive::Array => match self.item {
+                    None => Err(de::Error::custom(
+                        format!("'items' key not found in array type descriptor for '{}'", name),
+                    )),
+                    Some(item) => Ok(Type::Array {
+                        item: Box::new(item.into_item()?),
+                        min_items: self.min_items,
+                        max_items: self.max_items,
+                    }),
+                },
+                Primitive::Object => match self.properties {
+                    None => Ok(Type::Object(vec![])),
+                    Some(properties) => Ok(Type::Object(properties
+                        .into_iter()
+                        .map(FieldImpl::into_field)
+                        .collect::<Result<_, _>>()?)),
+                },
                 Primitive::Any => Ok(Type::Any),
             };
         }
 
-        Err(de::Error::custom(format!("neither 'type' nor '$ref' keys found in type descriptor \
-                                       for '{}'",
-                                      name)))
+        Err(de::Error::custom(
+            format!("neither 'type' nor '$ref' keys found in type descriptor for '{}'", name),
+        ))
     }
 }
 
 impl<'a> From<&'a Type> for TypeImpl {
     fn from(ty: &'a Type) -> TypeImpl {
         match *ty {
-            Type::Reference(ref target) => {
-                TypeImpl {
-                    reference: Some(target.clone()),
-                    primitive: None,
-                    enum_values: None,
-                    item: None,
-                    min_items: None,
-                    max_items: None,
-                    properties: None,
-                }
-            }
-            Type::Boolean => {
-                TypeImpl {
-                    primitive: Some(Primitive::Boolean),
-                    reference: None,
-                    enum_values: None,
-                    item: None,
-                    min_items: None,
-                    max_items: None,
-                    properties: None,
-                }
-            }
-            Type::Integer => {
-                TypeImpl {
-                    primitive: Some(Primitive::Integer),
-                    reference: None,
-                    enum_values: None,
-                    item: None,
-                    min_items: None,
-                    max_items: None,
-                    properties: None,
-                }
-            }
-            Type::Number => {
-                TypeImpl {
-                    primitive: Some(Primitive::Number),
-                    reference: None,
-                    enum_values: None,
-                    item: None,
-                    min_items: None,
-                    max_items: None,
-                    properties: None,
-                }
-            }
-            Type::String => {
-                TypeImpl {
-                    primitive: Some(Primitive::String),
-                    reference: None,
-                    enum_values: None,
-                    item: None,
-                    min_items: None,
-                    max_items: None,
-                    properties: None,
-                }
-            }
-            Type::Enum(ref values) => {
-                TypeImpl {
-                    primitive: Some(Primitive::String),
-                    enum_values: Some(values.clone()),
-                    reference: None,
-                    item: None,
-                    min_items: None,
-                    max_items: None,
-                    properties: None,
-                }
-            }
-            Type::Array { ref item, ref min_items, ref max_items } => {
-                TypeImpl {
-                    primitive: Some(Primitive::Array),
-                    item: Some(item.as_ref().into()),
-                    min_items: *min_items,
-                    max_items: *max_items,
-                    reference: None,
-                    enum_values: None,
-                    properties: None,
-                }
-            }
-            Type::Object(ref properties) => {
-                TypeImpl {
-                    primitive: Some(Primitive::Object),
-                    properties: Some(properties.iter().map(From::from).collect()),
-                    reference: None,
-                    enum_values: None,
-                    item: None,
-                    min_items: None,
-                    max_items: None,
-                }
-            }
-            Type::Any => {
-                TypeImpl {
-                    primitive: Some(Primitive::Any),
-                    reference: None,
-                    enum_values: None,
-                    item: None,
-                    min_items: None,
-                    max_items: None,
-                    properties: None,
-                }
-            }
+            Type::Reference(ref target) => TypeImpl {
+                reference: Some(target.clone()),
+                primitive: None,
+                enum_values: None,
+                item: None,
+                min_items: None,
+                max_items: None,
+                properties: None,
+            },
+            Type::Boolean => TypeImpl {
+                primitive: Some(Primitive::Boolean),
+                reference: None,
+                enum_values: None,
+                item: None,
+                min_items: None,
+                max_items: None,
+                properties: None,
+            },
+            Type::Integer => TypeImpl {
+                primitive: Some(Primitive::Integer),
+                reference: None,
+                enum_values: None,
+                item: None,
+                min_items: None,
+                max_items: None,
+                properties: None,
+            },
+            Type::Number => TypeImpl {
+                primitive: Some(Primitive::Number),
+                reference: None,
+                enum_values: None,
+                item: None,
+                min_items: None,
+                max_items: None,
+                properties: None,
+            },
+            Type::String => TypeImpl {
+                primitive: Some(Primitive::String),
+                reference: None,
+                enum_values: None,
+                item: None,
+                min_items: None,
+                max_items: None,
+                properties: None,
+            },
+            Type::Enum(ref values) => TypeImpl {
+                primitive: Some(Primitive::String),
+                enum_values: Some(values.clone()),
+                reference: None,
+                item: None,
+                min_items: None,
+                max_items: None,
+                properties: None,
+            },
+            Type::Array {
+                ref item,
+                ref min_items,
+                ref max_items,
+            } => TypeImpl {
+                primitive: Some(Primitive::Array),
+                item: Some(item.as_ref().into()),
+                min_items: *min_items,
+                max_items: *max_items,
+                reference: None,
+                enum_values: None,
+                properties: None,
+            },
+            Type::Object(ref properties) => TypeImpl {
+                primitive: Some(Primitive::Object),
+                properties: Some(properties.iter().map(From::from).collect()),
+                reference: None,
+                enum_values: None,
+                item: None,
+                min_items: None,
+                max_items: None,
+            },
+            Type::Any => TypeImpl {
+                primitive: Some(Primitive::Any),
+                reference: None,
+                enum_values: None,
+                item: None,
+                min_items: None,
+                max_items: None,
+                properties: None,
+            },
         }
     }
 }

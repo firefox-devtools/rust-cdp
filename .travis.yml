@@ -8,7 +8,7 @@ matrix:
       os: linux
     - rust: nightly
       os: linux
-      env: CLIPPY=true
+      env: CLIPPY=true RUSTFMT=true
     # osx
     - rust: stable
       os: osx
@@ -27,6 +27,10 @@ script:
   - if [ "$CLIPPY" = true ]; then
       travis_wait cargo install clippy --verbose &&
       travis_wait cargo clippy --verbose;
+    fi
+  - if [ "$RUSTFMT" = true ]; then
+      travis_wait cargo install --git 'https://github.com/rust-lang-nursery/rustfmt' --verbose &&
+      cargo fmt -- --write-mode diff;
     fi
 
 notifications:
