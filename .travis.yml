@@ -8,7 +8,7 @@ matrix:
       os: linux
     - rust: nightly
       os: linux
-      env: CLIPPY=true RUSTFMT=true
+      env: STRICT=true
     # osx
     - rust: stable
       os: osx
@@ -22,15 +22,27 @@ sudo: 9000
 
 script:
   - travis_wait cargo build --verbose
-  - travis_wait cargo test --verbose
-  - travis_wait cargo doc --verbose --no-deps
-  - if [ "$CLIPPY" = true ]; then
-      travis_wait cargo install clippy --verbose &&
-      travis_wait cargo clippy --verbose;
+  - if [ "$STRICT" = true ]; then
+      travis_wait cargo build --verbose --features strict;
+    else
+      travis_wait cargo build --verbose;
     fi
-  - if [ "$RUSTFMT" = true ]; then
+  - if [ "$STRICT" = true ]; then
+      travis_wait cargo test --verbose --features strict;
+    else
+      travis_wait cargo test --verbose;
+    fi
+  - travis_wait cargo doc --verbose --no-deps
+  - if [ "$STRICT" = true ]; then
       travis_wait cargo install --git 'https://github.com/rust-lang-nursery/rustfmt' --verbose &&
       cargo fmt -- --write-mode diff;
+    fi
+  - if [ "$STRICT" = true ]; then
+      grep -rL 'This Source Code Form is subject to the terms of the Mozilla Public License' src &&
+      grep -rL 'This Source Code Form is subject to the terms of the Mozilla Public License' tests;
+    fi
+  - if [ "$STRICT" = true ]; then
+      ./update_json.sh;
     fi
 
 notifications:

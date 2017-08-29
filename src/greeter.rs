@@ -6,9 +6,245 @@ use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{self, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
+use serde_json;
 use std::fmt::{self, Display, Formatter};
+use std::io::Write;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
+
+// Protocol
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum GreeterRequest<'a> {
+    VersionInfo,
+    PageList,
+    NewPage(Option<&'a str>),
+    ActivatePage(&'a str),
+}
+
+impl<'a> GreeterRequest<'a> {
+    pub fn parse(path: &'a str, query: Option<&'a str>) -> Option<Self> {
+        lazy_static! {
+            static ref GREETER_PATH_RE: Regex =
+                Regex::new(concat!(r"^", cdp_greeter_root_path!(), r"(/([^/]*))?(/(.*))?$"))
+                    .expect("cdp: GREETER_PATH_RE compilation failed");
+        }
+
+        GREETER_PATH_RE.captures(path).and_then(move |captures| match captures.get(2) {
+            None => Some(GreeterRequest::PageList),
+            Some(req) => match req.as_str() {
+                cdp_greeter_version_info_slug!() => Some(GreeterRequest::VersionInfo),
+                cdp_greeter_page_list_slug!() => Some(GreeterRequest::PageList),
+                cdp_greeter_new_page_slug!() => Some(GreeterRequest::NewPage(query)),
+                cdp_greeter_activate_page_slug!() => {
+                    Some(GreeterRequest::ActivatePage(match captures.get(4) {
+                        None => "",
+                        Some(url) => url.as_str(),
+                    }))
+                }
+                _ => None,
+            },
+        })
+    }
+
+    pub fn parse_with_slash(path: &'a str, query: Option<&'a str>) -> Option<Self> {
+        if let Some('/') = path.chars().next() {
+            GreeterRequest::parse(&path[1..], query)
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a> From<&'a OwnedGreeterRequest> for GreeterRequest<'a> {
+    fn from(src: &'a OwnedGreeterRequest) -> Self {
+        match *src {
+            OwnedGreeterRequest::VersionInfo => GreeterRequest::VersionInfo,
+            OwnedGreeterRequest::PageList => GreeterRequest::PageList,
+            OwnedGreeterRequest::NewPage(ref maybe_url) => {
+                GreeterRequest::NewPage(maybe_url.as_ref().map(|x| x.as_str()))
+            }
+            OwnedGreeterRequest::ActivatePage(ref page_id) => {
+                GreeterRequest::ActivatePage(page_id)
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum OwnedGreeterRequest {
+    VersionInfo,
+    PageList,
+    NewPage(Option<String>),
+    ActivatePage(String),
+}
+
+impl<'a, 'b> From<&'b GreeterRequest<'a>> for OwnedGreeterRequest {
+    fn from(src: &'b GreeterRequest<'a>) -> Self {
+        match *src {
+            GreeterRequest::VersionInfo => OwnedGreeterRequest::VersionInfo,
+            GreeterRequest::PageList => OwnedGreeterRequest::PageList,
+            GreeterRequest::NewPage(maybe_url) => {
+                OwnedGreeterRequest::NewPage(maybe_url.map(Into::into))
+            }
+            GreeterRequest::ActivatePage(page_id) => {
+                OwnedGreeterRequest::ActivatePage(page_id.into())
+            }
+        }
+    }
+}
+
+impl<'a> From<GreeterRequest<'a>> for OwnedGreeterRequest {
+    fn from(src: GreeterRequest<'a>) -> Self {
+        match src {
+            GreeterRequest::VersionInfo => OwnedGreeterRequest::VersionInfo,
+            GreeterRequest::PageList => OwnedGreeterRequest::PageList,
+            GreeterRequest::NewPage(maybe_url) => {
+                OwnedGreeterRequest::NewPage(maybe_url.map(Into::into))
+            }
+            GreeterRequest::ActivatePage(page_id) => {
+                OwnedGreeterRequest::ActivatePage(page_id.into())
+            }
+        }
+    }
+}
+
+impl OwnedGreeterRequest {
+    pub fn parse(path: &str, query: Option<&str>) -> Option<Self> {
+        GreeterRequest::parse(path, query).map(|x| x.into())
+    }
+
+    pub fn parse_with_slash(path: &str, query: Option<&str>) -> Option<Self> {
+        GreeterRequest::parse_with_slash(path, query).map(|x| x.into())
+    }
+}
+
+pub trait SerializeGreeterResponse {
+    fn status(&self) -> u16;
+
+    fn serialize_body<W>(&self, writer: W) -> Result<(), serde_json::Error>
+    where
+        W: Write;
+
+    fn serialize_body_to_string(&self, string: &mut String) -> Result<(), serde_json::Error>;
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GreeterErrorResponse;
+
+impl SerializeGreeterResponse for GreeterErrorResponse {
+    fn status(&self) -> u16 {
+        500
+    }
+
+    fn serialize_body<W>(&self, _writer: W) -> Result<(), serde_json::Error>
+    where
+        W: Write,
+    {
+        Ok(())
+    }
+
+    fn serialize_body_to_string(&self, _string: &mut String) -> Result<(), serde_json::Error> {
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Clone, Debug, Eq, PartialEq)]
+pub struct GreeterVersionInfoResponse<'a>(pub &'a VersionInfo);
+
+impl<'a> SerializeGreeterResponse for GreeterVersionInfoResponse<'a> {
+    fn status(&self) -> u16 {
+        200
+    }
+
+    fn serialize_body<W>(&self, writer: W) -> Result<(), serde_json::Error>
+    where
+        W: Write,
+    {
+        serde_json::to_writer(writer, self.0)
+    }
+
+    fn serialize_body_to_string(&self, string: &mut String) -> Result<(), serde_json::Error> {
+        serialize_json_to_string(string, self.0)
+    }
+}
+
+#[derive(Serialize, Clone, Debug, Eq, PartialEq)]
+pub struct GreeterPageListResponse<'a>(pub &'a [Page]);
+
+impl<'a> SerializeGreeterResponse for GreeterPageListResponse<'a> {
+    fn status(&self) -> u16 {
+        200
+    }
+
+    fn serialize_body<W>(&self, writer: W) -> Result<(), serde_json::Error>
+    where
+        W: Write,
+    {
+        serde_json::to_writer(writer, self.0)
+    }
+
+    fn serialize_body_to_string(&self, string: &mut String) -> Result<(), serde_json::Error> {
+        serialize_json_to_string(string, &self.0)
+    }
+}
+
+#[derive(Serialize, Clone, Debug, Eq, PartialEq)]
+pub struct GreeterNewPageResponse<'a>(pub &'a Page);
+
+impl<'a> SerializeGreeterResponse for GreeterNewPageResponse<'a> {
+    fn status(&self) -> u16 {
+        200
+    }
+
+    fn serialize_body<W>(&self, writer: W) -> Result<(), serde_json::Error>
+    where
+        W: Write,
+    {
+        serde_json::to_writer(writer, self.0)
+    }
+
+    fn serialize_body_to_string(&self, string: &mut String) -> Result<(), serde_json::Error> {
+        serialize_json_to_string(string, self.0)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GreeterActivatePageResponse {
+    Activated,
+    PageNotFound,
+}
+
+impl SerializeGreeterResponse for GreeterActivatePageResponse {
+    fn status(&self) -> u16 {
+        match *self {
+            GreeterActivatePageResponse::Activated => 200,
+            GreeterActivatePageResponse::PageNotFound => 404,
+        }
+    }
+
+    fn serialize_body<W>(&self, _writer: W) -> Result<(), serde_json::Error>
+    where
+        W: Write,
+    {
+        Ok(())
+    }
+
+    fn serialize_body_to_string(&self, _string: &mut String) -> Result<(), serde_json::Error> {
+        Ok(())
+    }
+}
+
+fn serialize_json_to_string<T>(string: &mut String, src: &T) -> Result<(), serde_json::Error>
+where
+    T: Serialize,
+{
+    // serde_json won't produce invalid UTF-8.
+    let buf = unsafe { string.as_mut_vec() };
+    serde_json::to_writer(buf, src)
+}
+
+// Types
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct VersionInfo {
@@ -350,11 +586,6 @@ impl<'de> Deserialize<'de> for Page {
     }
 }
 
-#[macro_export]
-macro_rules! cdp_frontend_url_format {
-    () => ( "chrome-devtools://devtools/bundled/inspector.html?ws={server_addr}/devtools/page/{page_id}" )
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DevToolsUrls {
     #[serde(rename = "webSocketDebuggerUrl")]
@@ -403,202 +634,5 @@ impl Display for PageType {
                 PageType::Other => "other page",
             }
         )
-    }
-}
-
-#[macro_export]
-macro_rules! cdp_http_root_path {
-    () => ( "json" )
-}
-
-#[macro_export]
-macro_rules! cdp_http_version_info_slug {
-    () => ( "version" )
-}
-
-#[macro_export]
-macro_rules! cdp_http_version_info_path {
-    () => ( concat!(cdp_http_root_path!(), "/", cdp_http_version_info_slug!()) )
-}
-
-#[macro_export]
-macro_rules! cdp_http_version_info_url_format {
-    () => ( concat!("http://{server_addr}/", cdp_http_version_info_path!()) )
-}
-
-#[macro_export]
-macro_rules! cdp_http_page_list_slug {
-    () => ( "list" )
-}
-
-#[macro_export]
-macro_rules! cdp_http_page_list_path {
-    () => ( concat!(cdp_http_root_path!(), "/", cdp_http_page_list_slug!()) )
-}
-
-#[macro_export]
-macro_rules! cdp_http_page_list_url_format {
-    () => ( concat!("http://{server_addr}/", cdp_http_page_list_path!()) )
-}
-
-#[macro_export]
-macro_rules! cdp_http_new_page_slug {
-    () => ( "new" )
-}
-
-#[macro_export]
-macro_rules! cdp_http_new_page_path {
-    () => ( concat!(cdp_http_root_path!(), "/", cdp_http_new_page_slug!()) )
-}
-
-#[macro_export]
-macro_rules! cdp_http_new_page_and_navigate_path_format {
-    () => ( concat!(cdp_http_new_page_path!(), "?{url}") )
-}
-
-#[macro_export]
-macro_rules! cdp_http_new_page_url_format {
-    () => ( concat!("http://{server_addr}/", cdp_http_new_page_path!()) )
-}
-
-#[macro_export]
-macro_rules! cdp_http_new_page_and_navigate_url_format {
-    () => ( concat!("http://{server_addr}/", cdp_http_new_page_and_navigate_path_format!()) )
-}
-
-#[macro_export]
-macro_rules! cdp_http_activate_page_slug {
-    () => ( "activate" )
-}
-
-#[macro_export]
-macro_rules! cdp_http_activate_page_path {
-    () => ( concat!(cdp_http_root_path!(), "/", cdp_http_activate_page_slug!()) )
-}
-
-#[macro_export]
-macro_rules! cdp_http_activate_page_path_format {
-    () => ( concat!(cdp_http_activate_page_path!(), "/{page_id}") )
-}
-
-#[macro_export]
-macro_rules! cdp_http_activate_page_url_format {
-    () => ( concat!("http://{server_addr}/", cdp_http_activate_page_path_format!()) )
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub enum Command<'a> {
-    VersionInfo,
-    PageList,
-    NewPage(Option<&'a str>),
-    ActivatePage(&'a str),
-}
-
-impl<'a> From<&'a OwnedCommand> for Command<'a> {
-    fn from(message: &'a OwnedCommand) -> Self {
-        match *message {
-            OwnedCommand::VersionInfo => Command::VersionInfo,
-            OwnedCommand::PageList => Command::PageList,
-            OwnedCommand::NewPage(ref maybe_url) => {
-                Command::NewPage(maybe_url.as_ref().map(|x| x.as_str()))
-            }
-            OwnedCommand::ActivatePage(ref page_id) => Command::ActivatePage(page_id),
-        }
-    }
-}
-
-impl<'a> Command<'a> {
-    pub fn parse(path: &'a str, query: Option<&'a str>) -> Option<Self> {
-        lazy_static! {
-            static ref HTTP_PATH_RE: Regex =
-                Regex::new(concat!(r"^", cdp_http_root_path!(), r"(/([^/]*))?(/(.*))?$"))
-                    .expect("cdp: HTTP_PATH_RE compilation failed");
-        }
-
-        HTTP_PATH_RE.captures(path).and_then(move |captures| match captures.get(2) {
-            None => Some(Command::PageList),
-            Some(command) => match command.as_str() {
-                cdp_http_version_info_slug!() => Some(Command::VersionInfo),
-                cdp_http_page_list_slug!() => Some(Command::PageList),
-                cdp_http_new_page_slug!() => Some(Command::NewPage(query)),
-                cdp_http_activate_page_slug!() => {
-                    Some(Command::ActivatePage(match captures.get(4) {
-                        None => "",
-                        Some(url) => url.as_str(),
-                    }))
-                }
-                _ => None,
-            },
-        })
-    }
-
-    pub fn parse_with_slash(path: &'a str, query: Option<&'a str>) -> Option<Self> {
-        if let Some('/') = path.chars().next() {
-            Command::parse(&path[1..], query)
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub enum OwnedCommand {
-    VersionInfo,
-    PageList,
-    NewPage(Option<String>),
-    ActivatePage(String),
-}
-
-impl<'a, 'b> From<&'b Command<'a>> for OwnedCommand {
-    fn from(message: &'b Command<'a>) -> Self {
-        match *message {
-            Command::VersionInfo => OwnedCommand::VersionInfo,
-            Command::PageList => OwnedCommand::PageList,
-            Command::NewPage(maybe_url) => OwnedCommand::NewPage(maybe_url.map(Into::into)),
-            Command::ActivatePage(page_id) => OwnedCommand::ActivatePage(page_id.into()),
-        }
-    }
-}
-
-impl<'a> From<Command<'a>> for OwnedCommand {
-    fn from(message: Command<'a>) -> Self {
-        match message {
-            Command::VersionInfo => OwnedCommand::VersionInfo,
-            Command::PageList => OwnedCommand::PageList,
-            Command::NewPage(maybe_url) => OwnedCommand::NewPage(maybe_url.map(Into::into)),
-            Command::ActivatePage(page_id) => OwnedCommand::ActivatePage(page_id.into()),
-        }
-    }
-}
-
-impl OwnedCommand {
-    pub fn parse(path: &str, query: Option<&str>) -> Option<Self> {
-        Command::parse(path, query).map(|x| x.into())
-    }
-
-    pub fn parse_with_slash(path: &str, query: Option<&str>) -> Option<Self> {
-        Command::parse_with_slash(path, query).map(|x| x.into())
-    }
-}
-
-#[derive(Serialize, Clone, Debug, Eq, PartialEq)]
-#[serde(untagged)]
-pub enum Response {
-    VersionInfo(VersionInfo),
-    PageList(Vec<Page>),
-    NewPage(Page),
-    ActivatePage(bool),
-}
-
-impl Response {
-    pub fn status(&self) -> u16 {
-        match *self {
-            Response::VersionInfo(..) | Response::PageList(..) | Response::NewPage(..) => 200,
-            Response::ActivatePage(activated) => if activated {
-                200
-            } else {
-                404
-            },
-        }
     }
 }

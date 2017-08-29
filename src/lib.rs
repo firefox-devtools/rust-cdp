@@ -3,6 +3,10 @@
 // obtain one at http://mozilla.org/MPL/2.0/.
 
 #![recursion_limit = "128"]
+#![cfg_attr(feature = "strict", deny(warnings))]
+#![cfg_attr(feature = "strict", deny(missing_debug_implementations))]
+#![cfg_attr(feature = "clippy", feature(plugin))]
+#![cfg_attr(feature = "clippy", plugin(clippy))]
 
 #[macro_use]
 extern crate lazy_static;
@@ -12,16 +16,17 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
 
-pub mod definition;
-mod ws_generated;
 #[macro_use]
-pub mod ws;
-pub mod http;
+mod macros;
 
-#[macro_export]
-macro_rules! cdp_default_port {
-    () => ( 9222 )
-}
+pub mod definition;
+pub mod greeter;
+pub mod json;
+pub mod ws;
+
+pub mod tools;
+mod tools_generated;
+
 pub const DEFAULT_PORT: u16 = cdp_default_port!();
 
 include!(concat!(env!("OUT_DIR"), "/constants.rs"));

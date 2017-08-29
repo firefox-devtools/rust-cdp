@@ -2,7 +2,9 @@
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at http://mozilla.org/MPL/2.0/.
 
-extern crate serde;
+// Not all tests use all available functions from this shared helper module.
+#![allow(dead_code)]
+
 extern crate serde_json;
 
 use serde::{Deserialize, Serialize};
@@ -20,7 +22,7 @@ pub fn do_test_json_ser<T>(json: &str, rust: &T)
 where
     T: Serialize + PartialEq + Debug,
 {
-    let ser = serde_json::to_string_pretty(rust).expect("serialize error");
+    let ser = serde_json::to_string(rust).expect("serialize error");
     assert_eq!(json, ser, "json serialize mismatch\n\nexpected:\n{}\n\nactual:\n{}", json, ser);
 }
 
@@ -36,4 +38,20 @@ where
         rust,
         &de
     );
+}
+
+pub fn do_test_json_pretty<T>(json: &str, rust: &T)
+where
+    for<'de> T: Deserialize<'de> + Serialize + PartialEq + Debug,
+{
+    do_test_json_pretty_ser(json, rust);
+    do_test_json_de(json, rust);
+}
+
+pub fn do_test_json_pretty_ser<T>(json: &str, rust: &T)
+where
+    T: Serialize + PartialEq + Debug,
+{
+    let ser = serde_json::to_string_pretty(rust).expect("serialize error");
+    assert_eq!(json, ser, "json serialize mismatch\n\nexpected:\n{}\n\nactual:\n{}", json, ser);
 }

@@ -23,11 +23,12 @@ appveyor = { repository = "spinda/cdp" }
 lazy_static = "0.2"
 regex = "0.2"
 serde = "1.0"
+serde_derive = "1.0"
 serde_json = "1.0"
 
-[dependencies.serde_derive]
-git = "https://github.com/spinda/serde"
-rev = "552971196d4a933277645c6347d3b778c3c70e2e"
+[dependencies.clippy]
+version = "*"
+optional = true
 
 [build-dependencies]
 Inflector = "0.10"
@@ -35,8 +36,13 @@ lazy_static = "0.2"
 quote = "0.3"
 regex = "0.2"
 serde = "1.0"
+serde_derive = "1.0"
 serde_json = "1.0"
 
-[build-dependencies.serde_derive]
-git = "https://github.com/spinda/serde"
-rev = "552971196d4a933277645c6347d3b778c3c70e2e"
+[build-dependencies.clippy]
+version = "*"
+optional = true
+
+[features]
+default = []
+strict = ["clippy"]

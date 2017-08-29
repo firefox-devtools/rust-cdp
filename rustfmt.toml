@@ -17,7 +17,6 @@ reorder_imports_in_group = true
 
 # ensure strings are properly wrapped
 format_strings = true
-force_format_strings = true
 
 # ensure consistent attribute placement
 attributes_on_same_line_as_field = false
