@@ -11,6 +11,10 @@ use std::fmt;
 
 pub use tools_generated::*;
 
+pub trait ToolsCommand {
+    const COMMAND_NAME: &'static str;
+}
+
 pub trait SerializeToolsCommand {
     fn command_name(&self) -> &str;
     fn serialize_command_params<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -51,6 +55,10 @@ pub trait DeserializeToolsCommand<'de>: Sized {
     ) -> Result<Result<Self, D::Error>, D>
     where
         D: Deserializer<'de>;
+}
+
+pub trait ToolsEvent {
+    const EVENT_NAME: &'static str;
 }
 
 pub trait SerializeToolsEvent {

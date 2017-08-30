@@ -16,7 +16,7 @@ mod helper;
 use serde_json::{Map, Value};
 
 use cdp::json::{JsonToolsError, JsonToolsIncoming, JsonToolsOutgoing};
-use cdp::tools::page;
+use cdp::tools::{page, ToolsCommand};
 
 #[test]
 fn test_incoming_page_navigate() {

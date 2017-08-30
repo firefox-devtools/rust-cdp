@@ -615,10 +615,11 @@ fn generate_method_struct(
 
     type_defs.push(struct_def);
 
+    let kind_trait = Ident::from(format!("Tools{}", kind));
     let name_const = Ident::from(format!("{}_NAME", kind.to_string().to_uppercase()));
     type_defs.push(quote! {
-        impl #struct_pascal_case {
-            pub const #name_const: &'static str = #method_qualified;
+        impl ::tools::#kind_trait for #struct_pascal_case {
+            const #name_const: &'static str = #method_qualified;
         }
     });
 }
