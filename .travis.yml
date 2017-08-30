@@ -39,7 +39,8 @@ script:
     fi
   - if [ "$STRICT" = true ]; then
       grep -rL 'This Source Code Form is subject to the terms of the Mozilla Public License' src &&
-      grep -rL 'This Source Code Form is subject to the terms of the Mozilla Public License' tests;
+      grep -rL 'This Source Code Form is subject to the terms of the Mozilla Public License' tests &&
+      grep -rL 'This Source Code Form is subject to the terms of the Mozilla Public License' *.sh;
     fi
   - if [ "$STRICT" = true ]; then
       ./update_json.sh;
