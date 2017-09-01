@@ -16,7 +16,7 @@ mod helper;
 use serde_json::{Map, Value};
 
 use cdp::json::{JsonToolsError, JsonToolsIncoming, JsonToolsOutgoing};
-use cdp::tools::{page, ToolsCommand};
+use cdp::tools::page;
 
 #[test]
 fn test_incoming_page_navigate() {
@@ -46,7 +46,7 @@ fn test_incoming_page_navigate() {
 
     let rust = JsonToolsIncoming {
         id: 1,
-        command_name: page::NavigateCommand::COMMAND_NAME.into(),
+        command_name: "Page.navigate".into(), // page::NavigateCommand::COMMAND_NAME.into(),
         command_params: match command_value {
             Value::Object(params) => params,
             _ => unreachable!("to_value produced a non-object"),

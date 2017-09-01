@@ -11,9 +11,10 @@ use std::fmt;
 
 pub use tools_generated::*;
 
-pub trait ToolsCommand {
-    const COMMAND_NAME: &'static str;
-}
+// * disabled until Firefox moves to Rust 1.20
+// pub trait ToolsCommand {
+// const COMMAND_NAME: &'static str;
+// }
 
 pub trait SerializeToolsCommand {
     fn command_name(&self) -> &str;
@@ -57,9 +58,10 @@ pub trait DeserializeToolsCommand<'de>: Sized {
         D: Deserializer<'de>;
 }
 
-pub trait ToolsEvent {
-    const EVENT_NAME: &'static str;
-}
+// * disabled until Firefox moves to Rust 1.20
+// pub trait ToolsEvent {
+// const EVENT_NAME: &'static str;
+// }
 
 pub trait SerializeToolsEvent {
     fn event_name(&self) -> &str;

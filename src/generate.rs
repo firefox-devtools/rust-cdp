@@ -559,8 +559,8 @@ fn generate_method_struct(
     struct_meta_attrs: &Tokens,
     deprecation_status: &DeprecationStatus,
     experimental: bool,
-    kind: MethodKind,
-    method_qualified: &str,
+    _kind: MethodKind,
+    _method_qualified: &str,
     fields: &[Field],
     type_defs: &mut Vec<Tokens>,
 ) {
@@ -615,13 +615,15 @@ fn generate_method_struct(
 
     type_defs.push(struct_def);
 
-    let kind_trait = Ident::from(format!("Tools{}", kind));
-    let name_const = Ident::from(format!("{}_NAME", kind.to_string().to_uppercase()));
-    type_defs.push(quote! {
-        impl ::tools::#kind_trait for #struct_pascal_case {
-            const #name_const: &'static str = #method_qualified;
-        }
-    });
+    // * disabled until Firefox moves to Rust 1.20
+    // let kind_trait = Ident::from(format!("Tools{}", kind));
+    // let name_const = Ident::from(format!("{}_NAME",
+    // kind.to_string().to_uppercase()));
+    // type_defs.push(quote! {
+    // impl ::tools::#kind_trait for #struct_pascal_case {
+    // const #name_const: &'static str = #method_qualified;
+    // }
+    // });
 }
 
 fn generate_field(
