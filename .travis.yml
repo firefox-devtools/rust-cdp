@@ -45,7 +45,3 @@ script:
   - if [ "$STRICT" = true ]; then
       ./update_json.sh;
     fi
-
-notifications:
-  email:
-    on_success: never
