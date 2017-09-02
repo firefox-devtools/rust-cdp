@@ -21,7 +21,6 @@ matrix:
 sudo: 9000
 
 script:
-  - travis_wait cargo build --verbose
   - if [ "$STRICT" = true ]; then
       travis_wait cargo build --verbose --features strict;
     else
