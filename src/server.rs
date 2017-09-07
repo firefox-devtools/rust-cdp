@@ -70,7 +70,7 @@ pub trait CdpServerResponder: Sized {
     /// ```rust,ignore
     /// responder.invalid_params("url: string value expected".into())
     /// ```
-    fn invalid_params(self, message: String) -> Result<(), Self::Error>;
+    fn invalid_params(self, message: &str) -> Result<(), Self::Error>;
 
     /// Send back a failure response, indicating to the client that while the
     /// command was understood and the server implementation is functioning
@@ -80,7 +80,7 @@ pub trait CdpServerResponder: Sized {
     /// responder.server_error("The URL specified is invalid.".into())
     /// responder.server_error("The TLS handshake failed.".into())
     /// ```
-    fn server_error(self, message: String) -> Result<(), Self::Error>;
+    fn server_error(self, message: &str) -> Result<(), Self::Error>;
 
     /// Send back a failure response, indicating to the client that an internal,
     /// server implementation-specific error occurred (for example, an IPC

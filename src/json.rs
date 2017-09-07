@@ -5,6 +5,7 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::ser::SerializeStruct;
 use serde_json::{self, Map, Value};
+use std::borrow::Cow;
 use std::error::Error;
 use std::fmt;
 use std::io::{Read, Write};
@@ -68,16 +69,16 @@ impl<'a> SerializeCdpEvent for (&'a str, &'a Map<String, Value>) {
 // Incoming Messages (to the server, from the client)
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct JsonCdpIncoming {
+pub struct JsonCdpIncoming<'a> {
     pub id: u64,
     #[serde(rename = "method")]
-    pub command_name: String,
+    pub command_name: Cow<'a, str>,
     #[serde(rename = "params")]
     pub command_params: Map<String, Value>,
 }
 
-impl JsonCdpIncoming {
-    pub fn parse<'de, D>(deserializer: D) -> Result<Self, (JsonCdpError, Option<u64>)>
+impl<'a> JsonCdpIncoming<'a> {
+    pub fn parse<'de, D>(deserializer: D) -> Result<Self, (JsonCdpError<'static>, Option<u64>)>
     where
         D: Deserializer<'de>,
     {
@@ -102,23 +103,23 @@ impl JsonCdpIncoming {
         };
         Ok(JsonCdpIncoming {
             id: id,
-            command_name: method,
+            command_name: method.into(),
             command_params: params,
         })
     }
 
-    pub fn parse_from_reader<T>(reader: T) -> Result<Self, (JsonCdpError, Option<u64>)>
+    pub fn parse_from_reader<T>(reader: T) -> Result<Self, (JsonCdpError<'static>, Option<u64>)>
     where
         T: Read,
     {
         JsonCdpIncoming::parse(&mut serde_json::Deserializer::from_reader(reader))
     }
 
-    pub fn parse_from_str(src: &str) -> Result<Self, (JsonCdpError, Option<u64>)> {
+    pub fn parse_from_str(src: &str) -> Result<Self, (JsonCdpError<'static>, Option<u64>)> {
         JsonCdpIncoming::parse(&mut serde_json::Deserializer::from_str(src))
     }
 
-    pub fn parse_from_slice(src: &[u8]) -> Result<Self, (JsonCdpError, Option<u64>)> {
+    pub fn parse_from_slice(src: &[u8]) -> Result<Self, (JsonCdpError<'static>, Option<u64>)> {
         JsonCdpIncoming::parse(&mut serde_json::Deserializer::from_slice(src))
     }
 
@@ -177,19 +178,19 @@ impl JsonCdpIncoming {
 // Outgoing Messages (from the server, to the client)
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum JsonCdpOutgoing {
+pub enum JsonCdpOutgoing<'a> {
     Result {
         id: u64,
-        result: Result<Map<String, Value>, JsonCdpError>,
+        result: Result<Map<String, Value>, JsonCdpError<'a>>,
     },
     Event {
-        name: String,
+        name: Cow<'a, str>,
         params: Map<String, Value>,
     },
-    Error(JsonCdpError),
+    Error(JsonCdpError<'a>),
 }
 
-impl JsonCdpOutgoing {
+impl<'a> JsonCdpOutgoing<'a> {
     pub fn serialize_result<S, R>(
         serializer: S,
         id: u64,
@@ -372,7 +373,7 @@ impl JsonCdpOutgoing {
     }
 }
 
-impl Serialize for JsonCdpOutgoing {
+impl<'a> Serialize for JsonCdpOutgoing<'a> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -384,7 +385,7 @@ impl Serialize for JsonCdpOutgoing {
             JsonCdpOutgoing::Event {
                 ref name,
                 ref params,
-            } => JsonCdpOutgoing::serialize_event(serializer, &(name.as_str(), params)),
+            } => JsonCdpOutgoing::serialize_event(serializer, &(name.as_ref(), params)),
             JsonCdpOutgoing::Error(ref error) => {
                 JsonCdpOutgoing::serialize_error(serializer, None, error)
             }
@@ -392,7 +393,7 @@ impl Serialize for JsonCdpOutgoing {
     }
 }
 
-impl<'de> Deserialize<'de> for JsonCdpOutgoing {
+impl<'de, 'a> Deserialize<'de> for JsonCdpOutgoing<'a> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -403,19 +404,19 @@ impl<'de> Deserialize<'de> for JsonCdpOutgoing {
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(untagged)]
-enum JsonCdpOutgoingImpl {
+enum JsonCdpOutgoingImpl<'a> {
     CommandSuccess { id: u64, result: Map<String, Value> },
-    CommandFailure { id: u64, error: JsonCdpError },
-    GeneralFailure { error: JsonCdpError },
+    CommandFailure { id: u64, error: JsonCdpError<'a> },
+    GeneralFailure { error: JsonCdpError<'a> },
     Event {
-        method: String,
+        method: Cow<'a, str>,
         params: Map<String, Value>,
     },
 }
 
-impl From<JsonCdpOutgoingImpl> for JsonCdpOutgoing {
+impl<'a> From<JsonCdpOutgoingImpl<'a>> for JsonCdpOutgoing<'a> {
     #[inline]
-    fn from(message: JsonCdpOutgoingImpl) -> Self {
+    fn from(message: JsonCdpOutgoingImpl<'a>) -> Self {
         match message {
             JsonCdpOutgoingImpl::GeneralFailure { error } => JsonCdpOutgoing::Error(error),
             JsonCdpOutgoingImpl::CommandSuccess { id, result } => JsonCdpOutgoing::Result {
@@ -437,15 +438,15 @@ impl From<JsonCdpOutgoingImpl> for JsonCdpOutgoing {
 // Error
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct JsonCdpError {
+pub struct JsonCdpError<'a> {
     #[serde(rename = "code")]
     pub kind: JsonCdpErrorKind,
-    pub message: String,
+    pub message: Cow<'a, str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<Value>,
 }
 
-impl JsonCdpError {
+impl<'a> JsonCdpError<'a> {
     // https://github.com/nodejs/node/blob/8a8a6865c092637515b286cd9575ea592b5f501e/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L254
     pub fn invalid_json() -> Self {
         JsonCdpError {
@@ -486,7 +487,7 @@ impl JsonCdpError {
     pub fn method_not_found(method: &str) -> Self {
         JsonCdpError {
             kind: JsonCdpErrorKind::MethodNotFound,
-            message: format!("'{}' wasn't found", method),
+            message: format!("'{}' wasn't found", method).into(),
             data: None,
         }
     }
@@ -501,7 +502,7 @@ impl JsonCdpError {
     }
 
     // https://github.com/nodejs/node/blob/d74a545535868380b028c27dfcdf54e2d5f7c563/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L21-L29
-    pub fn server_error(message: String) -> Self {
+    pub fn server_error(message: Cow<'a, str>) -> Self {
         JsonCdpError {
             kind: JsonCdpErrorKind::ServerError,
             message: message,
@@ -519,13 +520,13 @@ impl JsonCdpError {
     }
 }
 
-impl Error for JsonCdpError {
+impl<'a> Error for JsonCdpError<'a> {
     fn description(&self) -> &str {
         "DevTools error"
     }
 }
 
-impl fmt::Display for JsonCdpError {
+impl<'a> fmt::Display for JsonCdpError<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.data {
             None => write!(
