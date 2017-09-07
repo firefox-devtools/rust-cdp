@@ -22,14 +22,20 @@ travis-ci = { repository = "devtools-html/cdp" }
 appveyor = { repository = "spinda/cdp" }
 
 [dependencies]
-lazy_static = "0.2"
-regex = "0.2"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
 
 [dependencies.clippy]
 version = "*"
+optional = true
+
+[dependencies.lazy_static]
+version = "0.2"
+optional = true
+
+[dependencies.regex]
+version = "0.2"
 optional = true
 
 [build-dependencies]
@@ -48,5 +54,7 @@ version = "*" #build
 optional = true #build
 
 [features]
-default = []
+default = ["proto", "ws"]
 strict = ["clippy"]
+proto = []
+ws = ["lazy_static", "regex"]

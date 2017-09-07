@@ -2,7 +2,11 @@
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at http://mozilla.org/MPL/2.0/.
 
-use regex::Regex;
+#![cfg(feature = "ws")]
+
+extern crate regex;
+
+use self::regex::Regex;
 
 #[macro_export]
 macro_rules! cdp_ws_path {

@@ -63,6 +63,12 @@ fn main() {
             .expect("error writing constants.rs");
     }
 
+    // Only bother generating the proto module if its corresponding feature is
+    // enabled.
+    if env::var_os("CARGO_FEATURE_PROTO").is_none() {
+        return;
+    }
+
     let mut domains = browser_protocol.domains;
     domains.extend_from_slice(&js_protocol.domains);
 

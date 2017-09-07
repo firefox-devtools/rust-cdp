@@ -32,6 +32,10 @@ cp LICENSE-CHROMIUM target/bake/
 cp README.md target/bake/
 cp -r src/ target/bake/
 cp -r tests/ target/bake/
+cp .gitignore target/bake/
+cp rustfmt.toml target/bake/
+cp appveyor.yml target/bake/
+sed '/sh/d' .travis.yml > target/bake/.travis.yml
 
 # Bake in the generated source.
 sed -i '/include/d' target/bake/src/lib.rs

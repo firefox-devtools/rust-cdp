@@ -22,6 +22,21 @@ sudo: 9000
 
 script:
   - if [ "$STRICT" = true ]; then
+      travis_wait cargo build --verbose --no-default-features --features strict;
+    else
+      travis_wait cargo build --verbose --no-default-features;
+    fi
+  - if [ "$STRICT" = true ]; then
+      travis_wait cargo build --verbose --no-default-features --features 'strict ws';
+    else
+      travis_wait cargo build --verbose --no-default-features --features ws;
+    fi
+  - if [ "$STRICT" = true ]; then
+      travis_wait cargo build --verbose --no-default-features --features 'strict proto';
+    else
+      travis_wait cargo build --verbose --no-default-features --features proto;
+    fi
+  - if [ "$STRICT" = true ]; then
       travis_wait cargo build --verbose --features strict;
     else
       travis_wait cargo build --verbose;
@@ -37,10 +52,10 @@ script:
       cargo fmt -- --write-mode diff;
     fi
   - if [ "$STRICT" = true ]; then
-      grep -rL 'This Source Code Form is subject to the terms of the Mozilla Public License' src &&
-      grep -rL 'This Source Code Form is subject to the terms of the Mozilla Public License' tests &&
-      grep -rL 'This Source Code Form is subject to the terms of the Mozilla Public License' *.sh;
+      grep -rL 'This Source Code Form is subject to the terms of the Mozilla Public License' src
+      && grep -rL 'This Source Code Form is subject to the terms of the Mozilla Public License' tests
+      && grep -rL 'This Source Code Form is subject to the terms of the Mozilla Public License' *.sh
+      ;
     fi
-  - if [ "$STRICT" = true ]; then
-      ./update_json.sh;
-    fi
+  - if [ "$STRICT" = true ]; then ./update_json.sh; fi
+  - if [ "$STRICT" = true ]; then ./bake.sh; fi
