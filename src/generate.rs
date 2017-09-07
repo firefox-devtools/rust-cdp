@@ -6,38 +6,44 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 #![cfg_attr(feature = "clippy", feature(plugin))]
 #![cfg_attr(feature = "clippy", plugin(clippy))]
-// Too may false positives.
-#![cfg_attr(feature = "clippy", allow(trivial_regex))]
+#![cfg_attr(feature = "clippy", allow(too_many_arguments))]
+#![cfg_attr(feature = "clippy", allow(trivial_regex))] // false positive
 
 extern crate inflector;
-extern crate regex;
-extern crate serde;
-extern crate serde_json;
-
 #[macro_use]
 extern crate lazy_static;
-
+extern crate petgraph;
 #[macro_use]
 extern crate quote;
-
+extern crate regex;
+extern crate rustfmt;
+extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+extern crate serde_json;
 
 mod definition;
 
 use inflector::Inflector;
+use petgraph::Directed;
+use petgraph::graph::{Graph, NodeIndex};
+use petgraph::visit::{Control, DfsEvent};
 use quote::{Ident, Tokens};
 use regex::Regex;
+use rustfmt::Input;
+use rustfmt::config::Config;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fmt;
 use std::fs::File;
-use std::io::Write;
+use std::io::{self, Write};
+use std::iter;
 use std::path::Path;
 
 use definition::{Definition, Domain, Field, Method, Type, TypeDef, Version};
 
 fn main() {
-    let out_dir = env::var("OUT_DIR").expect("Error retrieving OUT_DIR environment variable");
+    let out_dir = env::var("OUT_DIR").expect("error retrieving OUT_DIR environment variable");
 
     let browser_protocol =
         read_protocol_file("json/browser_protocol.json", "error reading browser_protocol.json");
@@ -48,18 +54,25 @@ fn main() {
         panic!("json/browser_protocol.json and json/js_protocol.json versions don't match");
     }
 
-    let constants_src = generate_constants(&browser_protocol.version);
-    let constants_path = Path::new(&out_dir).join("constants.rs");
-    let mut constants_file = File::create(constants_path).expect("Error creating constants.rs");
-    constants_file
-        .write_all(constants_src.as_bytes())
-        .expect("Error writing generated constants.rs");
+    {
+        let constants_src = generate_constants(&browser_protocol.version);
+        let constants_path = Path::new(&out_dir).join("constants.rs");
+        let mut constants_file =
+            File::create(constants_path).expect("error creating constants.rs");
+        write_generated_source(constants_src, &mut constants_file)
+            .expect("error writing constants.rs");
+    }
 
-    let proto_src =
-        generate_proto(browser_protocol.domains.iter().chain(js_protocol.domains.iter()));
-    let proto_path = Path::new(&out_dir).join("proto_generated.rs");
-    let mut proto_file = File::create(proto_path).expect("Error creating proto_generated.rs");
-    proto_file.write_all(proto_src.as_bytes()).expect("Error writing proto_generated.rs");
+    let mut domains = browser_protocol.domains;
+    domains.extend_from_slice(&js_protocol.domains);
+
+    {
+        let proto_src = generate_proto(&domains);
+        let proto_path = Path::new(&out_dir).join("proto_generated.rs");
+        let mut proto_file = File::create(proto_path).expect("error creating proto_generated.rs");
+        write_generated_source(proto_src, &mut proto_file)
+            .expect("error writing proto_generated.rs");
+    }
 
     println!("cargo:rerun-if-changed=json/browser_protocol.json");
     println!("cargo:rerun-if-changed=json/js_protocol.json");
@@ -68,6 +81,24 @@ fn main() {
 fn read_protocol_file(file: &str, msg: &str) -> Definition {
     let mut file = File::open(file).expect(msg);
     serde_json::from_reader(&mut file).expect(msg)
+}
+
+fn write_generated_source<T>(src: String, out: &mut T) -> Result<(), io::Error>
+where
+    T: Write,
+{
+    let mut config = Config::default();
+    config.override_value("error_on_line_overflow", "false");
+    config.override_value("skip_children", "true");
+    config.override_value("write_mode", "plain");
+
+    let result = rustfmt::format_input(Input::Text(src), &config, Some(out));
+    let (_, _, report) = result.map_err(|x| x.0)?;
+    if report.has_warnings() {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, report.to_string()));
+    }
+
+    Ok(())
 }
 
 fn generate_constants(version: &Version) -> String {
@@ -83,12 +114,152 @@ fn generate_constants(version: &Version) -> String {
     }).to_string()
 }
 
-fn generate_proto<'a, T>(domains: T) -> String
-where
-    T: Iterator<Item = &'a Domain>,
-{
-    let modules = domains.map(generate_domain);
+fn generate_proto(domains: &[Domain]) -> String {
+    let uses_lifetime_set = generate_uses_lifetime_set(domains);
+    let modules = domains.iter().map(|domain| generate_domain(domain, &uses_lifetime_set));
     quote!(#(#modules)*).to_string()
+}
+
+fn generate_uses_lifetime_set(domains: &[Domain]) -> HashSet<Ident> {
+    let mut reference_graph = Graph::new();
+    let mut item_indices = HashMap::new();
+
+    let string_index = reference_graph.add_node(None);
+
+    fn item_index(
+        item_fully_qualified: Ident,
+        reference_graph: &mut Graph<Option<Ident>, (), Directed>,
+        item_indices: &mut HashMap<Ident, NodeIndex>,
+    ) -> NodeIndex {
+        if let Some(index) = item_indices.get(&item_fully_qualified) {
+            return *index;
+        }
+
+        let index = reference_graph.add_node(Some(item_fully_qualified.clone()));
+        item_indices.insert(item_fully_qualified, index);
+        index
+    }
+
+    fn traverse_fields<'a, T>(
+        domain_snake_case: &Ident,
+        parent_pascal_case: &Ident,
+        fields: T,
+        string_index: NodeIndex,
+        reference_graph: &mut Graph<Option<Ident>, (), Directed>,
+        item_indices: &mut HashMap<Ident, NodeIndex>,
+    ) where
+        T: Iterator<Item = &'a Field>,
+    {
+        for field in fields {
+            traverse_type(
+                domain_snake_case,
+                parent_pascal_case,
+                &field.ty,
+                string_index,
+                reference_graph,
+                item_indices,
+            )
+        }
+    }
+
+    fn traverse_type(
+        domain_snake_case: &Ident,
+        parent_pascal_case: &Ident,
+        ty: &Type,
+        string_index: NodeIndex,
+        reference_graph: &mut Graph<Option<Ident>, (), Directed>,
+        item_indices: &mut HashMap<Ident, NodeIndex>,
+    ) {
+        match *ty {
+            Type::String => {
+                let parent_fully_qualified =
+                    fully_qualified_ident(domain_snake_case, parent_pascal_case);
+                let parent_index =
+                    item_index(parent_fully_qualified, reference_graph, item_indices);
+                reference_graph.add_edge(string_index, parent_index, ());
+            }
+            Type::Reference(ref target) => {
+                let target_pascal_case = pascal_case_ident(target);
+                if target_pascal_case != parent_pascal_case {
+                    let target_fully_qualified =
+                        resolve_reference(domain_snake_case, target, &target_pascal_case);
+                    let target_index =
+                        item_index(target_fully_qualified, reference_graph, item_indices);
+
+                    let parent_fully_qualified =
+                        fully_qualified_ident(domain_snake_case, parent_pascal_case);
+                    let parent_index =
+                        item_index(parent_fully_qualified, reference_graph, item_indices);
+
+                    reference_graph.add_edge(target_index, parent_index, ());
+                }
+            }
+            Type::Array { ref item, .. } => {
+                traverse_type(
+                    domain_snake_case,
+                    parent_pascal_case,
+                    &item.ty,
+                    string_index,
+                    reference_graph,
+                    item_indices,
+                );
+            }
+            Type::Object(ref fields) => traverse_fields(
+                domain_snake_case,
+                parent_pascal_case,
+                fields.iter(),
+                string_index,
+                reference_graph,
+                item_indices,
+            ),
+            Type::Boolean | Type::Integer | Type::Number | Type::Any | Type::Enum(_) => (),
+        }
+    }
+
+    for domain in domains.iter() {
+        let domain_snake_case = snake_case_ident(&domain.name);
+        let domain_methods = domain.commands.iter().chain(domain.events.iter());
+        for method in domain_methods {
+            let method_pascal_case = pascal_case_ident(&method.name);
+            let method_fields = method.parameters.iter().chain(method.returns.iter());
+            traverse_fields(
+                &domain_snake_case,
+                &method_pascal_case,
+                method_fields,
+                string_index,
+                &mut reference_graph,
+                &mut item_indices,
+            );
+        }
+        for type_def in &domain.type_defs {
+            let type_def_pascal_case = pascal_case_ident(&type_def.name);
+            traverse_type(
+                &domain_snake_case,
+                &type_def_pascal_case,
+                &type_def.ty,
+                string_index,
+                &mut reference_graph,
+                &mut item_indices,
+            );
+        }
+    }
+
+    // 1 = starting String node which won't make it into the final set
+    let mut uses_lifetime_set = HashSet::with_capacity(reference_graph.node_count() - 1);
+
+    petgraph::visit::depth_first_search(&reference_graph, iter::once(string_index), |event| {
+        if let DfsEvent::Discover(item_index, _) = event {
+            if let Some(ref item_fully_qualified) =
+                *reference_graph.node_weight(item_index).unwrap()
+            {
+                uses_lifetime_set.insert(item_fully_qualified.clone());
+            }
+        }
+        Control::Continue::<()>
+    });
+
+    uses_lifetime_set.shrink_to_fit();
+    uses_lifetime_set
 }
 
 #[derive(Clone, Copy)]
@@ -106,7 +277,7 @@ impl fmt::Display for MethodKind {
     }
 }
 
-fn generate_domain(domain: &Domain) -> Tokens {
+fn generate_domain(domain: &Domain, uses_lifetime_set: &HashSet<Ident>) -> Tokens {
     let domain_snake_case = snake_case_ident(&domain.name);
 
     let deprecation_status = DeprecationStatus::new(domain.deprecated, &domain.description);
@@ -123,6 +294,7 @@ fn generate_domain(domain: &Domain) -> Tokens {
                 &deprecation_status,
                 MethodKind::Command,
                 command,
+                uses_lifetime_set,
                 &mut domain_index,
                 &mut type_defs,
             );
@@ -138,6 +310,7 @@ fn generate_domain(domain: &Domain) -> Tokens {
                 &deprecation_status,
                 MethodKind::Event,
                 event,
+                uses_lifetime_set,
                 &mut domain_index,
                 &mut type_defs,
             );
@@ -152,6 +325,7 @@ fn generate_domain(domain: &Domain) -> Tokens {
                 &domain_snake_case,
                 &deprecation_status,
                 type_def,
+                uses_lifetime_set,
                 &mut domain_index,
                 &mut type_defs,
             );
@@ -182,6 +356,7 @@ fn generate_type_def(
     domain_snake_case: &Ident,
     domain_deprecation_status: &DeprecationStatus,
     type_def: &TypeDef,
+    uses_lifetime_set: &HashSet<Ident>,
     domain_index: &mut String,
     type_defs: &mut Vec<Tokens>,
 ) {
@@ -191,7 +366,7 @@ fn generate_type_def(
         .add_parent(domain_deprecation_status);
     let experimental = domain.experimental || type_def.experimental;
 
-    let maybe_expr = generate_type_expr_impl(
+    let (maybe_expr, uses_lifetime) = generate_type_expr_impl(
         domain_snake_case,
         &type_def_pascal_case,
         None,
@@ -199,6 +374,7 @@ fn generate_type_def(
         experimental,
         &type_def.description,
         &type_def.ty,
+        uses_lifetime_set,
         type_defs,
     );
 
@@ -220,9 +396,10 @@ fn generate_type_def(
     if let Some(expr) = maybe_expr {
         let meta_attrs =
             generate_meta_attrs(&deprecation_status, experimental, &type_def.description, None);
+        let lifetime_generics = generate_lifetime_generics(uses_lifetime);
         type_defs.push(quote! {
             #meta_attrs
-            pub type #type_def_pascal_case = #expr;
+            pub type #type_def_pascal_case#lifetime_generics = #expr;
         });
     }
 }
@@ -234,9 +411,10 @@ fn generate_type_expr(
     deprecation_status: &DeprecationStatus,
     experimental: bool,
     ty: &Type,
+    uses_lifetime_set: &HashSet<Ident>,
     type_defs: &mut Vec<Tokens>,
-) -> Tokens {
-    let maybe_expr = generate_type_expr_impl(
+) -> (Tokens, bool) {
+    let (maybe_expr, uses_lifetime) = generate_type_expr_impl(
         domain_snake_case,
         parent_pascal_case,
         field_name,
@@ -244,19 +422,21 @@ fn generate_type_expr(
         experimental,
         &None,
         ty,
+        uses_lifetime_set,
         type_defs,
     );
 
-    match maybe_expr {
+    let expr = match maybe_expr {
         Some(expr) => expr,
         None => {
             let type_def_pascal_case = combine_parent_field_idents(parent_pascal_case, field_name);
-            quote! { ::proto::#domain_snake_case::#type_def_pascal_case }
+            let type_def_lifetime_generics = generate_lifetime_generics(uses_lifetime);
+            quote!(::proto::#domain_snake_case::#type_def_pascal_case#type_def_lifetime_generics)
         }
-    }
+    };
+    (expr, uses_lifetime)
 }
 
-#[cfg_attr(feature = "clippy", allow(too_many_arguments))]
 fn generate_type_expr_impl(
     domain_snake_case: &Ident,
     parent_pascal_case: &Ident,
@@ -265,16 +445,27 @@ fn generate_type_expr_impl(
     experimental: bool,
     description: &Option<String>,
     ty: &Type,
+    uses_lifetime_set: &HashSet<Ident>,
     type_defs: &mut Vec<Tokens>,
-) -> Option<Tokens> {
+) -> (Option<Tokens>, bool) {
     match *ty {
         Type::Reference(ref target) => {
-            Some(resolve_reference(domain_snake_case, parent_pascal_case, target))
+            let target_pascal_case = pascal_case_ident(target);
+            let target_fully_qualified =
+                resolve_reference(domain_snake_case, target, &target_pascal_case);
+            let target_uses_lifetime = uses_lifetime_set.contains(&target_fully_qualified);
+            let target_lifetime_generics = generate_lifetime_generics(target_uses_lifetime);
+            let target_expr = if target_pascal_case == parent_pascal_case {
+                quote! { Box<#target_fully_qualified#target_lifetime_generics> }
+            } else {
+                quote! { #target_fully_qualified#target_lifetime_generics }
+            };
+            (Some(target_expr), target_uses_lifetime)
         }
-        Type::Boolean => Some(quote! { bool }),
-        Type::Integer => Some(quote! { i32 }),
-        Type::Number => Some(quote! { f64 }),
-        Type::String => Some(quote! { String }),
+        Type::Boolean => (Some(quote! { bool }), false),
+        Type::Integer => (Some(quote! { i32 }), false),
+        Type::Number => (Some(quote! { f64 }), false),
+        Type::String => (Some(quote! { ::std::borrow::Cow<'a, str> }), true),
         Type::Enum(ref values) => {
             let type_def_pascal_case = combine_parent_field_idents(parent_pascal_case, field_name);
             let note =
@@ -344,39 +535,43 @@ fn generate_type_expr_impl(
                 }
             });
 
-            None
+            (None, false)
         }
         Type::Array {
             ref item,
             min_items,
             max_items,
         } => {
-            let item_expr = generate_type_expr(
+            let (item_expr, item_uses_lifetime) = generate_type_expr(
                 domain_snake_case,
                 parent_pascal_case,
                 field_name,
                 deprecation_status,
                 experimental,
                 &item.ty,
+                uses_lifetime_set,
                 type_defs,
             );
 
-            Some(match (min_items, max_items) {
+            let array_expr = match (min_items, max_items) {
                 (Some(min), Some(max)) if min == max => {
                     let n = max as usize;
                     quote! { [#item_expr; #n] }
                 }
                 _ => quote! { Vec<#item_expr> },
-            })
+            };
+            (Some(array_expr), item_uses_lifetime)
         }
         Type::Object(ref properties) => if properties.is_empty() {
-            Some(quote! { ::proto::Empty })
+            (Some(quote! { ::proto::Empty }), false)
         } else {
             let type_def_pascal_case = combine_parent_field_idents(parent_pascal_case, field_name);
             let note =
                 generate_field_usage_note(domain_snake_case, parent_pascal_case, field_name);
             let meta_attrs =
                 generate_meta_attrs(deprecation_status, experimental, description, note);
+
+            let mut fields_use_lifetime = false;
             let fields: Vec<Tokens> = properties
                 .iter()
                 .map(|field| {
@@ -386,22 +581,25 @@ fn generate_type_expr_impl(
                         deprecation_status,
                         experimental,
                         field,
+                        uses_lifetime_set,
+                        &mut fields_use_lifetime,
                         type_defs,
                     )
                 })
                 .collect();
 
+            let type_def_lifetime_generics = generate_lifetime_generics(fields_use_lifetime);
             type_defs.push(quote! {
                 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
                 #meta_attrs
-                pub struct #type_def_pascal_case {
+                pub struct #type_def_pascal_case#type_def_lifetime_generics {
                     #(#fields, )*
                 }
             });
 
-            None
+            (None, fields_use_lifetime)
         },
-        Type::Any => Some(quote! { ::serde_json::Value }),
+        Type::Any => (Some(quote! { ::serde_json::Value }), false),
     }
 }
 
@@ -440,6 +638,7 @@ fn generate_method(
     domain_deprecation_status: &DeprecationStatus,
     kind: MethodKind,
     method: &Method,
+    uses_lifetime_set: &HashSet<Ident>,
     domain_index: &mut String,
     type_defs: &mut Vec<Tokens>,
 ) {
@@ -477,7 +676,9 @@ fn generate_method(
     let meta_attrs =
         generate_meta_attrs(&deprecation_status, experimental, &method.description, Some(note));
 
-    generate_method_struct(
+    let common_lifetime = quote! { 'a };
+
+    let request_uses_lifetime = generate_method_struct(
         domain_snake_case,
         &request_pascal_case,
         &meta_attrs,
@@ -486,15 +687,25 @@ fn generate_method(
         kind,
         &method_qualified,
         method.parameters.as_slice(),
+        uses_lifetime_set,
         type_defs,
     );
+    let maybe_request_lifetime = if request_uses_lifetime {
+        Some(&common_lifetime)
+    } else {
+        None
+    };
+    let request_lifetime_generics = maybe_request_lifetime.map(|request_lifetime| {
+        quote! { <#request_lifetime> }
+    });
 
     let request_serialize_trait = Ident::from(format!("SerializeCdp{}", kind));
     let request_name_method = Ident::from(format!("{}_name", kind).to_lowercase());
     let request_serialize_params_method =
         Ident::from(format!("serialize_{}_params", kind).to_lowercase());
     type_defs.push(quote! {
-        impl ::traits::#request_serialize_trait for #request_pascal_case {
+        impl#request_lifetime_generics ::traits::#request_serialize_trait
+                for #request_pascal_case#request_lifetime_generics {
             fn #request_name_method(&self) -> &str {
                 #method_qualified
             }
@@ -511,7 +722,8 @@ fn generate_method(
     let request_deserialize_trait = Ident::from(format!("DeserializeCdp{}", kind));
     let request_deserialize_method = Ident::from(format!("deserialize_{}", kind).to_lowercase());
     type_defs.push(quote! {
-        impl<'de> ::traits::#request_deserialize_trait<'de> for #request_pascal_case {
+        impl<'de, #maybe_request_lifetime> ::traits::#request_deserialize_trait<'de>
+                for #request_pascal_case#request_lifetime_generics {
             fn #request_deserialize_method<D>(
                 name: &str,
                 params: D,
@@ -529,7 +741,7 @@ fn generate_method(
     });
 
     if let Some(ref response_pascal_case) = maybe_response_pascal_case {
-        generate_method_struct(
+        let response_uses_lifetime = generate_method_struct(
             domain_snake_case,
             response_pascal_case,
             &meta_attrs,
@@ -538,26 +750,33 @@ fn generate_method(
             kind,
             &method_qualified,
             method.returns.as_slice(),
+            uses_lifetime_set,
             type_defs,
         );
+        let response_lifetime_generics = if response_uses_lifetime {
+            Some(quote! { <#common_lifetime> })
+        } else {
+            None
+        };
 
         type_defs.push(quote! {
-            impl ::traits::HasCdpResponse for #request_pascal_case {
-                type Response = #response_pascal_case;
+            impl<#common_lifetime> ::traits::HasCdpResponse<#common_lifetime>
+                    for #request_pascal_case#request_lifetime_generics {
+                type Response = #response_pascal_case#response_lifetime_generics;
             }
         });
 
         let has_request_trait = Ident::from(format!("HasCdp{}", kind));
         let has_request_assoc_type = Ident::from(kind.to_string());
         type_defs.push(quote! {
-            impl ::traits::#has_request_trait for #response_pascal_case {
-                type #has_request_assoc_type = #request_pascal_case;
+            impl<#common_lifetime> ::traits::#has_request_trait<#common_lifetime>
+                    for #response_pascal_case#response_lifetime_generics {
+                type #has_request_assoc_type = #request_pascal_case#request_lifetime_generics;
             }
         });
     }
 }
 
-#[cfg_attr(feature = "clippy", allow(too_many_arguments))]
 fn generate_method_struct(
     domain_snake_case: &Ident,
     struct_pascal_case: &Ident,
@@ -567,10 +786,11 @@ fn generate_method_struct(
     _kind: MethodKind,
     _method_qualified: &str,
     fields: &[Field],
+    uses_lifetime_set: &HashSet<Ident>,
     type_defs: &mut Vec<Tokens>,
-) {
-    let struct_def = if fields.is_empty() {
-        quote! {
+) -> bool {
+    let (struct_def, struct_lifetime_generics) = if fields.is_empty() {
+        let struct_def = quote! {
             #[derive(Clone, Debug, PartialEq)]
             #struct_meta_attrs
             pub struct #struct_pascal_case;
@@ -593,8 +813,10 @@ fn generate_method_struct(
                         .map(|_| #struct_pascal_case)
                 }
             }
-        }
+        };
+        (struct_def, None)
     } else {
+        let mut fields_use_lifetime = false;
         let struct_fields: Vec<Tokens> = fields
             .iter()
             .map(|field| {
@@ -604,18 +826,22 @@ fn generate_method_struct(
                     deprecation_status,
                     experimental,
                     field,
+                    uses_lifetime_set,
+                    &mut fields_use_lifetime,
                     type_defs,
                 )
             })
             .collect();
 
-        quote! {
+        let struct_lifetime_generics = generate_lifetime_generics(fields_use_lifetime);
+        let struct_def = quote! {
             #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
             #struct_meta_attrs
-            pub struct #struct_pascal_case {
+            pub struct #struct_pascal_case#struct_lifetime_generics {
                 #(#struct_fields, )*
             }
-        }
+        };
+        (struct_def, struct_lifetime_generics)
     };
 
     type_defs.push(struct_def);
@@ -625,10 +851,13 @@ fn generate_method_struct(
     // let name_const = Ident::from(format!("{}_NAME",
     // kind.to_string().to_uppercase()));
     // type_defs.push(quote! {
-    // impl ::traits::#kind_trait for #struct_pascal_case {
+    // impl#struct_lifetime_generics ::traits::#kind_trait
+    // for #struct_pascal_case#struct_lifetime_generics {
     // const #name_const: &'static str = #method_qualified;
     // }
     // });
+
+    struct_lifetime_generics.is_some()
 }
 
 fn generate_field(
@@ -637,6 +866,8 @@ fn generate_field(
     parent_deprecation_status: &DeprecationStatus,
     parent_experimental: bool,
     field: &Field,
+    uses_lifetime_set: &HashSet<Ident>,
+    fields_use_lifetime: &mut bool,
     type_defs: &mut Vec<Tokens>,
 ) -> Tokens {
     let field_name = &field.name;
@@ -647,15 +878,19 @@ fn generate_field(
     let meta_attrs =
         generate_meta_attrs(&deprecation_status, field.experimental, &field.description, None);
 
-    let ty = generate_type_expr(
+    let (ty, uses_lifetime) = generate_type_expr(
         domain_snake_case,
         parent_pascal_case,
         Some(field_name),
         parent_deprecation_status,
         parent_experimental,
         &field.ty,
+        uses_lifetime_set,
         type_defs,
     );
+    if uses_lifetime {
+        *fields_use_lifetime = true;
+    }
 
     let (optional_attr, wrapped_ty) = if field.optional {
         (Some(quote! { skip_serializing_if = "Option::is_none" }), quote! { Option<#ty> })
@@ -808,26 +1043,33 @@ fn replace_unsafe_chars(src: &str) -> String {
 
 fn resolve_reference(
     domain_snake_case: &Ident,
-    parent_pascal_case: &Ident,
     target: &str,
-) -> Tokens {
+    target_pascal_case: &Ident,
+) -> Ident {
     lazy_static! {
         static ref INTER_DOMAIN_RE: Regex = Regex::new(r"^([[:alnum:]]+)\.([[:alnum:]]+)$")
             .expect("cdp: INTER_DOMAIN_RE compilation failed");
     }
 
-    let target_pascal_case = pascal_case_ident(target);
-    if target_pascal_case == parent_pascal_case {
-        return quote! { Box<#target_pascal_case> };
-    }
-
     match INTER_DOMAIN_RE.captures(target) {
-        None => quote! { ::proto::#domain_snake_case::#target_pascal_case },
+        None => fully_qualified_ident(domain_snake_case, target_pascal_case),
         Some(captures) => {
             let domain_snake_case = snake_case_ident(&captures[1]);
             let item_pascal_case = pascal_case_ident(&captures[2]);
-            quote! { ::proto::#domain_snake_case::#item_pascal_case }
+            fully_qualified_ident(&domain_snake_case, &item_pascal_case)
         }
+    }
+}
+
+fn fully_qualified_ident(domain_snake_case: &Ident, item_ident: &Ident) -> Ident {
+    Ident::from(format!("::proto::{}::{}", domain_snake_case, item_ident))
+}
+
+fn generate_lifetime_generics(uses_lifetime: bool) -> Option<Tokens> {
+    if uses_lifetime {
+        Some(quote! { <'a> })
+    } else {
+        None
     }
 }
 

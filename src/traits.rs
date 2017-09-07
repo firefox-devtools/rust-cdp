@@ -46,10 +46,10 @@ pub trait DeserializeCdpEvent<'de>: Sized {
         D: Deserializer<'de>;
 }
 
-pub trait HasCdpCommand {
+pub trait HasCdpCommand<'a> {
     type Command;
 }
 
-pub trait HasCdpResponse {
+pub trait HasCdpResponse<'a> {
     type Response;
 }

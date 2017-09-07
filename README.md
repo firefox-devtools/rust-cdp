@@ -25,15 +25,16 @@ extern crate cdp;
 
 ## License
 
-[MPL-2.0](/LICENSE)
+Please see [LICENSE.md](/LICENSE.md).
 
-Helpful resources:
+## Maintainers
 
-- [Mozilla's MPL-2.0 FAQ](https://www.mozilla.org/en-US/MPL/2.0/FAQ/)
-- [MPL-2.0 on TLDRLegal](https://tldrlegal.com/license/mozilla-public-license-2.0-\(mpl-2\))
+The `update_json.sh` script can be used to automatically identify the latest Chrome stable release
+and download the correspondong Chrome DevTools Protocol specification JSON files. Ideally this
+crate should track the Chrome stable release cycle.
 
-### Contribution
-
-Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in the work by you shall be licensed as above, without any
-additional terms or conditions.
+During development, this crate is configured to automatically generate code from these JSON files
+as part of the build process. For a release, however, this generated code should be "baked" into
+the published artifact, saving time for end users and freeing them from having to install the build
+dependencies. The `bake.sh` script will perform this task, placing a ready-for-release version of
+this crate in the `target/bake/` directory.

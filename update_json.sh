@@ -59,8 +59,8 @@ echo
 # good measure.
 echo "Downloading LICENSE file from GitHub..."
 echo
-curl 'https://raw.githubusercontent.com/ChromeDevTools/devtools-protocol/master/LICENSE' >json/LICENSE.new
+curl 'https://raw.githubusercontent.com/ChromeDevTools/devtools-protocol/master/LICENSE' >LICENSE-CHROMIUM.new
 echo
-git diff --no-index -- json/LICENSE json/LICENSE.new
+git diff --no-index -- LICENSE-CHROMIUM LICENSE-CHROMIUM.new
 echo 'LICENSE file matches our previous copy.'
-mv json/LICENSE.new json/LICENSE
+mv LICENSE-CHROMIUM.new LICENSE-CHROMIUM
