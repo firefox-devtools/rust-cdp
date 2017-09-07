@@ -22,11 +22,4 @@ pub mod traits;
 pub mod proto;
 mod proto_generated;
 
-#[macro_export]
-macro_rules! cdp_default_port {
-    () => ( 9222 )
-}
-
-pub const DEFAULT_PORT: u16 = cdp_default_port!();
-
 include!(concat!(env!("OUT_DIR"), "/constants.rs"));
