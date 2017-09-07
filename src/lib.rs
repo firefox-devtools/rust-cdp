@@ -8,6 +8,9 @@
 #![cfg_attr(feature = "clippy", feature(plugin))]
 #![cfg_attr(feature = "clippy", plugin(clippy))]
 
+#[macro_use]
+extern crate lazy_static;
+extern crate regex;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
@@ -18,8 +21,16 @@ pub mod definition;
 pub mod json;
 pub mod server;
 pub mod traits;
+pub mod ws;
 
 pub mod proto;
 mod proto_generated;
+
+#[macro_export]
+macro_rules! cdp_default_remote_port {
+    () => ( 9222 )
+}
+
+pub const DEFAULT_REMOTE_PORT: u16 = cdp_default_remote_port!();
 
 include!(concat!(env!("OUT_DIR"), "/constants.rs"));
