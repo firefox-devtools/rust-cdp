@@ -55,11 +55,11 @@ fn main() {
         .write_all(constants_src.as_bytes())
         .expect("Error writing generated constants.rs");
 
-    let tools_src =
-        generate_tools(browser_protocol.domains.iter().chain(js_protocol.domains.iter()));
-    let tools_path = Path::new(&out_dir).join("tools_generated.rs");
-    let mut tools_file = File::create(tools_path).expect("Error creating tools_generated.rs");
-    tools_file.write_all(tools_src.as_bytes()).expect("Error writing tools_generated.rs");
+    let proto_src =
+        generate_proto(browser_protocol.domains.iter().chain(js_protocol.domains.iter()));
+    let proto_path = Path::new(&out_dir).join("proto_generated.rs");
+    let mut proto_file = File::create(proto_path).expect("Error creating proto_generated.rs");
+    proto_file.write_all(proto_src.as_bytes()).expect("Error writing proto_generated.rs");
 
     println!("cargo:rerun-if-changed=json/browser_protocol.json");
     println!("cargo:rerun-if-changed=json/js_protocol.json");
@@ -74,11 +74,16 @@ fn generate_constants(version: &Version) -> String {
     let version_string = version.to_string();
 
     (quote! {
-        pub const STABLE_PROTOCOL_VERSION: &'static str = #version_string;
+        #[macro_export]
+        macro_rules! cdp_stable_protocol_version {
+            () => ( #version_string )
+        }
+
+        pub const STABLE_PROTOCOL_VERSION: &'static str = cdp_stable_protocol_version!();
     }).to_string()
 }
 
-fn generate_tools<'a, T>(domains: T) -> String
+fn generate_proto<'a, T>(domains: T) -> String
 where
     T: Iterator<Item = &'a Domain>,
 {
@@ -246,7 +251,7 @@ fn generate_type_expr(
         Some(expr) => expr,
         None => {
             let type_def_pascal_case = combine_parent_field_idents(parent_pascal_case, field_name);
-            quote! { ::tools::#domain_snake_case::#type_def_pascal_case }
+            quote! { ::proto::#domain_snake_case::#type_def_pascal_case }
         }
     }
 }
@@ -317,12 +322,12 @@ fn generate_type_expr_impl(
                 }
 
                 impl ::std::str::FromStr for #type_def_pascal_case {
-                    type Err = ::tools::ParseEnumError;
+                    type Err = ::proto::ParseEnumError;
 
                     fn from_str(s: &str) -> Result<Self, Self::Err> {
                         match s {
                             #(#parse_arms, )*
-                            _ => Err(::tools::ParseEnumError {
+                            _ => Err(::proto::ParseEnumError {
                                 expected: #type_def_pascal_case::STR_VALUES,
                                 actual: s.into(),
                             }),
@@ -365,7 +370,7 @@ fn generate_type_expr_impl(
             })
         }
         Type::Object(ref properties) => if properties.is_empty() {
-            Some(quote! { ::tools::Empty })
+            Some(quote! { ::proto::Empty })
         } else {
             let type_def_pascal_case = combine_parent_field_idents(parent_pascal_case, field_name);
             let note =
@@ -408,7 +413,7 @@ fn generate_field_usage_note(
     field_name.map(|field_name| {
         let field_snake_case = snake_case_ident(field_name);
         format!(
-            "Used in the type of [`cdp::tools::{}::{}::{}`](struct.{}.html#structfield.{}).",
+            "Used in the type of [`cdp::proto::{}::{}::{}`](struct.{}.html#structfield.{}).",
             domain_snake_case,
             parent_pascal_case,
             field_snake_case,
@@ -484,12 +489,12 @@ fn generate_method(
         type_defs,
     );
 
-    let request_serialize_trait = Ident::from(format!("SerializeTools{}", kind));
+    let request_serialize_trait = Ident::from(format!("SerializeCdp{}", kind));
     let request_name_method = Ident::from(format!("{}_name", kind).to_lowercase());
     let request_serialize_params_method =
         Ident::from(format!("serialize_{}_params", kind).to_lowercase());
     type_defs.push(quote! {
-        impl ::tools::#request_serialize_trait for #request_pascal_case {
+        impl ::traits::#request_serialize_trait for #request_pascal_case {
             fn #request_name_method(&self) -> &str {
                 #method_qualified
             }
@@ -503,10 +508,10 @@ fn generate_method(
         }
     });
 
-    let request_deserialize_trait = Ident::from(format!("DeserializeTools{}", kind));
+    let request_deserialize_trait = Ident::from(format!("DeserializeCdp{}", kind));
     let request_deserialize_method = Ident::from(format!("deserialize_{}", kind).to_lowercase());
     type_defs.push(quote! {
-        impl<'de> ::tools::#request_deserialize_trait<'de> for #request_pascal_case {
+        impl<'de> ::traits::#request_deserialize_trait<'de> for #request_pascal_case {
             fn #request_deserialize_method<D>(
                 name: &str,
                 params: D,
@@ -537,15 +542,15 @@ fn generate_method(
         );
 
         type_defs.push(quote! {
-            impl ::tools::HasToolsResponse for #request_pascal_case {
+            impl ::traits::HasCdpResponse for #request_pascal_case {
                 type Response = #response_pascal_case;
             }
         });
 
-        let has_request_trait = Ident::from(format!("HasTools{}", kind));
+        let has_request_trait = Ident::from(format!("HasCdp{}", kind));
         let has_request_assoc_type = Ident::from(kind.to_string());
         type_defs.push(quote! {
-            impl ::tools::#has_request_trait for #response_pascal_case {
+            impl ::traits::#has_request_trait for #response_pascal_case {
                 type #has_request_assoc_type = #request_pascal_case;
             }
         });
@@ -575,7 +580,7 @@ fn generate_method_struct(
                 where
                     S: ::serde::Serializer,
                 {
-                    ::serde::Serialize::serialize(&::tools::Empty, serializer)
+                    ::serde::Serialize::serialize(&::proto::Empty, serializer)
                 }
             }
 
@@ -584,7 +589,7 @@ fn generate_method_struct(
                 where
                     D: ::serde::Deserializer<'de>,
                 {
-                    <::tools::Empty as ::serde::Deserialize<'de>>::deserialize(deserializer)
+                    <::proto::Empty as ::serde::Deserialize<'de>>::deserialize(deserializer)
                         .map(|_| #struct_pascal_case)
                 }
             }
@@ -616,11 +621,11 @@ fn generate_method_struct(
     type_defs.push(struct_def);
 
     // * disabled until Firefox moves to Rust 1.20
-    // let kind_trait = Ident::from(format!("Tools{}", kind));
+    // let kind_trait = Ident::from(format!("Cdp{}", kind));
     // let name_const = Ident::from(format!("{}_NAME",
     // kind.to_string().to_uppercase()));
     // type_defs.push(quote! {
-    // impl ::tools::#kind_trait for #struct_pascal_case {
+    // impl ::traits::#kind_trait for #struct_pascal_case {
     // const #name_const: &'static str = #method_qualified;
     // }
     // });
@@ -817,11 +822,11 @@ fn resolve_reference(
     }
 
     match INTER_DOMAIN_RE.captures(target) {
-        None => quote! { ::tools::#domain_snake_case::#target_pascal_case },
+        None => quote! { ::proto::#domain_snake_case::#target_pascal_case },
         Some(captures) => {
             let domain_snake_case = snake_case_ident(&captures[1]);
             let item_pascal_case = pascal_case_ident(&captures[2]);
-            quote! { ::tools::#domain_snake_case::#item_pascal_case }
+            quote! { ::proto::#domain_snake_case::#item_pascal_case }
         }
     }
 }
@@ -931,7 +936,7 @@ fn generate_method_note(
         None => String::new(),
         Some(ref response_pascal_case) => format!(
             "  \n*Response Struct:* \
-             [`cdp::tools::{domain_snake_case}::\
+             [`cdp::proto::{domain_snake_case}::\
              {response_pascal_case}`](struct.{response_pascal_case}.html)",
             domain_snake_case = domain_snake_case,
             response_pascal_case = response_pascal_case,
@@ -941,9 +946,9 @@ fn generate_method_note(
     format!(
         "# {kind} `{method_qualified}`\n\n\
          *Domain Module:* \
-         [`cdp::tools::{domain_snake_case}`](index.html)  \n\
+         [`cdp::proto::{domain_snake_case}`](index.html)  \n\
          *{kind} Struct:* \
-         [`cdp::tools::{domain_snake_case}::{request_pascal_case}`]\
+         [`cdp::proto::{domain_snake_case}::{request_pascal_case}`]\
          (struct.{request_pascal_case}.html){response_line}",
         domain_snake_case = domain_snake_case,
         method_qualified = method_qualified,

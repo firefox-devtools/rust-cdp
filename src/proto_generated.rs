@@ -5,4 +5,4 @@
 #![allow(deprecated)]
 // Otherwise rustc warns that we're using our own deprecated types...
 
-include!(concat!(env!("OUT_DIR"), "/tools_generated.rs"));
+include!(concat!(env!("OUT_DIR"), "/proto_generated.rs"));

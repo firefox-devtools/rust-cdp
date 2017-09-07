@@ -12,7 +12,7 @@ extern crate cdp;
 
 mod helper;
 
-use cdp::tools::{page, Empty, ParseEnumError};
+use cdp::proto::{page, Empty, ParseEnumError};
 use std::str::FromStr;
 
 #[test]

@@ -15,8 +15,8 @@ mod helper;
 
 use serde_json::{Map, Value};
 
-use cdp::json::{JsonToolsError, JsonToolsIncoming, JsonToolsOutgoing};
-use cdp::tools::page;
+use cdp::json::{JsonCdpError, JsonCdpIncoming, JsonCdpOutgoing};
+use cdp::proto::page;
 
 #[test]
 fn test_incoming_page_navigate() {
@@ -30,7 +30,7 @@ fn test_incoming_page_navigate() {
 
     {
         let mut serialized = String::new();
-        JsonToolsIncoming::serialize_to_string(&mut serialized, 1, &command)
+        JsonCdpIncoming::serialize_to_string(&mut serialized, 1, &command)
             .expect("serialize error");
         assert_eq!(json, &serialized);
     }
@@ -38,13 +38,11 @@ fn test_incoming_page_navigate() {
     let command_value = serde_json::to_value(&command).expect("to_value error");
     assert_eq!(
         command_value,
-        Value::Object(
-            JsonToolsIncoming::parse_from_str(json).expect("parse error").command_params
-        )
+        Value::Object(JsonCdpIncoming::parse_from_str(json).expect("parse error").command_params)
     );
     assert_eq!(command, serde_json::from_value(command_value.clone()).expect("from_value error"));
 
-    let rust = JsonToolsIncoming {
+    let rust = JsonCdpIncoming {
         id: 1,
         command_name: "Page.navigate".into(), // page::NavigateCommand::COMMAND_NAME.into(),
         command_params: match command_value {
@@ -58,45 +56,33 @@ fn test_incoming_page_navigate() {
 #[test]
 fn test_parse_incoming_invalid() {
     let json = "hello";
-    assert_eq!(
-        JsonToolsIncoming::parse_from_str(json),
-        Err((JsonToolsError::invalid_json(), None))
-    );
+    assert_eq!(JsonCdpIncoming::parse_from_str(json), Err((JsonCdpError::invalid_json(), None)));
 }
 
 #[test]
 fn test_parse_incoming_not_object() {
     let json = "1";
-    assert_eq!(
-        JsonToolsIncoming::parse_from_str(json),
-        Err((JsonToolsError::must_be_object(), None))
-    );
+    assert_eq!(JsonCdpIncoming::parse_from_str(json), Err((JsonCdpError::must_be_object(), None)));
 }
 
 #[test]
 fn test_parse_incoming_missing_id() {
     let json = "{}";
-    assert_eq!(
-        JsonToolsIncoming::parse_from_str(json),
-        Err((JsonToolsError::must_have_id(), None))
-    );
+    assert_eq!(JsonCdpIncoming::parse_from_str(json), Err((JsonCdpError::must_have_id(), None)));
 }
 
 #[test]
 fn test_parse_incoming_non_integer_id() {
     let json = r#"{"id":"0"}"#;
-    assert_eq!(
-        JsonToolsIncoming::parse_from_str(json),
-        Err((JsonToolsError::must_have_id(), None))
-    );
+    assert_eq!(JsonCdpIncoming::parse_from_str(json), Err((JsonCdpError::must_have_id(), None)));
 }
 
 #[test]
 fn test_parse_incoming_missing_method() {
     let json = r#"{"id":0}"#;
     assert_eq!(
-        JsonToolsIncoming::parse_from_str(json),
-        Err((JsonToolsError::must_have_method(), Some(0)))
+        JsonCdpIncoming::parse_from_str(json),
+        Err((JsonCdpError::must_have_method(), Some(0)))
     );
 }
 
@@ -104,8 +90,8 @@ fn test_parse_incoming_missing_method() {
 fn test_parse_incoming_non_object_params() {
     let json = r#"{"id":0,"method":"Page.enable","params":7}"#;
     assert_eq!(
-        JsonToolsIncoming::parse_from_str(json),
-        Ok(JsonToolsIncoming {
+        JsonCdpIncoming::parse_from_str(json),
+        Ok(JsonCdpIncoming {
             id: 0,
             command_name: "Page.enable".into(),
             command_params: Map::new(),
@@ -116,34 +102,34 @@ fn test_parse_incoming_non_object_params() {
 #[test]
 fn test_parse_incoming_no_params_field() {
     let json = r#"{"id":0,"method":"Page.enable"}"#;
-    let rust = JsonToolsIncoming {
+    let rust = JsonCdpIncoming {
         id: 0,
         command_name: "Page.enable".into(),
         command_params: Map::new(),
     };
-    assert_eq!(JsonToolsIncoming::parse_from_str(json), Ok(rust));
+    assert_eq!(JsonCdpIncoming::parse_from_str(json), Ok(rust));
 }
 
 #[test]
 fn test_parse_incoming_empty_params_object() {
     let json = r#"{"id":0,"method":"Page.enable","params":{}}"#;
-    let rust = JsonToolsIncoming {
+    let rust = JsonCdpIncoming {
         id: 0,
         command_name: "Page.enable".into(),
         command_params: Map::new(),
     };
-    assert_eq!(JsonToolsIncoming::parse_from_str(json), Ok(rust));
+    assert_eq!(JsonCdpIncoming::parse_from_str(json), Ok(rust));
 }
 
 #[test]
 fn test_parse_incoming_incoming_extra_field() {
     let json = r#"{"id":0,"method":"Page.enable","params":{},"foo":"bar"}"#;
-    let rust = JsonToolsIncoming {
+    let rust = JsonCdpIncoming {
         id: 0,
         command_name: "Page.enable".into(),
         command_params: Map::new(),
     };
-    assert_eq!(JsonToolsIncoming::parse_from_str(json), Ok(rust));
+    assert_eq!(JsonCdpIncoming::parse_from_str(json), Ok(rust));
 }
 
 #[test]
@@ -156,14 +142,14 @@ fn test_outgoing_success_result() {
 
     {
         let mut serialized = String::new();
-        JsonToolsOutgoing::serialize_response_to_string(&mut serialized, 1, &response)
+        JsonCdpOutgoing::serialize_response_to_string(&mut serialized, 1, &response)
             .expect("serialize error");
         assert_eq!(json, &serialized);
     }
 
     {
         let mut serialized = String::new();
-        JsonToolsOutgoing::serialize_result_to_string(&mut serialized, 1, Ok(&response))
+        JsonCdpOutgoing::serialize_result_to_string(&mut serialized, 1, Ok(&response))
             .expect("serialize error");
         assert_eq!(json, &serialized);
     }
@@ -174,7 +160,7 @@ fn test_outgoing_success_result() {
         serde_json::from_value(response_value.clone()).expect("from_value error")
     );
 
-    let rust = JsonToolsOutgoing::Result {
+    let rust = JsonCdpOutgoing::Result {
         id: 1,
         result: Ok(match response_value {
             Value::Object(params) => params,
@@ -188,25 +174,25 @@ fn test_outgoing_success_result() {
 fn test_outgoing_error_result() {
     let json = r#"{"id":1,"error":{"code":-32601,"message":"'Foo.bar' wasn't found"}}"#;
 
-    let rust = JsonToolsOutgoing::Result {
+    let rust = JsonCdpOutgoing::Result {
         id: 1,
-        result: Err(JsonToolsError::method_not_found("Foo.bar")),
+        result: Err(JsonCdpError::method_not_found("Foo.bar")),
     };
 
     helper::do_test_json_de(json, &rust);
 
-    let error = JsonToolsError::method_not_found("Foo.bar");
+    let error = JsonCdpError::method_not_found("Foo.bar");
 
     {
         let mut serialized = String::new();
-        JsonToolsOutgoing::serialize_error_to_string(&mut serialized, Some(1), &error)
+        JsonCdpOutgoing::serialize_error_to_string(&mut serialized, Some(1), &error)
             .expect("serialize error");
         assert_eq!(json, &serialized);
     }
 
     {
         let mut serialized = String::new();
-        JsonToolsOutgoing::serialize_result_to_string(
+        JsonCdpOutgoing::serialize_result_to_string(
             &mut serialized,
             1,
             Err(&error) as Result<&page::NavigateResponse, _>,
@@ -222,14 +208,13 @@ fn test_outgoing_event() {
     let event = page::DomContentEventFiredEvent { timestamp: 12.7 };
 
     let mut serialized = String::new();
-    JsonToolsOutgoing::serialize_event_to_string(&mut serialized, &event)
-        .expect("serialize error");
+    JsonCdpOutgoing::serialize_event_to_string(&mut serialized, &event).expect("serialize error");
     assert_eq!(json, &serialized);
 
     let event_value = serde_json::to_value(&event).expect("to_value error");
     assert_eq!(event, serde_json::from_value(event_value.clone()).expect("from_value error"));
 
-    let rust = JsonToolsOutgoing::Event {
+    let rust = JsonCdpOutgoing::Event {
         name: "Page.domContentEventFired".into(),
         params: match event_value {
             Value::Object(params) => params,
@@ -243,14 +228,14 @@ fn test_outgoing_event() {
 fn test_outgoing_error() {
     let json = r#"{"error":{"code":-32700,"message":"Message must be a valid JSON"}}"#;
 
-    let rust = JsonToolsOutgoing::Error(JsonToolsError::invalid_json());
+    let rust = JsonCdpOutgoing::Error(JsonCdpError::invalid_json());
 
     helper::do_test_json_de(json, &rust);
 
-    let error = JsonToolsError::invalid_json();
+    let error = JsonCdpError::invalid_json();
 
     let mut serialized = String::new();
-    JsonToolsOutgoing::serialize_error_to_string(&mut serialized, None, &error)
+    JsonCdpOutgoing::serialize_error_to_string(&mut serialized, None, &error)
         .expect("serialize error");
     assert_eq!(json, &serialized);
 }

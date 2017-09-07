@@ -9,12 +9,66 @@ use std::error::Error;
 use std::fmt;
 use std::io::{Read, Write};
 
-use tools::{SerializeToolsCommand, SerializeToolsEvent};
+use traits::{SerializeCdpCommand, SerializeCdpEvent};
+
+// JSON Serialization Impls
+
+impl SerializeCdpCommand for (String, Map<String, Value>) {
+    fn command_name(&self) -> &str {
+        &self.0
+    }
+
+    fn serialize_command_params<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.1.serialize(serializer)
+    }
+}
+
+impl<'a> SerializeCdpCommand for (&'a str, &'a Map<String, Value>) {
+    fn command_name(&self) -> &str {
+        self.0
+    }
+
+    fn serialize_command_params<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.1.serialize(serializer)
+    }
+}
+
+impl SerializeCdpEvent for (String, Map<String, Value>) {
+    fn event_name(&self) -> &str {
+        &self.0
+    }
+
+    fn serialize_event_params<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.1.serialize(serializer)
+    }
+}
+
+impl<'a> SerializeCdpEvent for (&'a str, &'a Map<String, Value>) {
+    fn event_name(&self) -> &str {
+        self.0
+    }
+
+    fn serialize_event_params<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.1.serialize(serializer)
+    }
+}
 
 // Incoming Messages (to the server, from the client)
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct JsonToolsIncoming {
+pub struct JsonCdpIncoming {
     pub id: u64,
     #[serde(rename = "method")]
     pub command_name: String,
@@ -22,62 +76,62 @@ pub struct JsonToolsIncoming {
     pub command_params: Map<String, Value>,
 }
 
-impl JsonToolsIncoming {
-    pub fn parse<'de, D>(deserializer: D) -> Result<Self, (JsonToolsError, Option<u64>)>
+impl JsonCdpIncoming {
+    pub fn parse<'de, D>(deserializer: D) -> Result<Self, (JsonCdpError, Option<u64>)>
     where
         D: Deserializer<'de>,
     {
         let value =
-            Value::deserialize(deserializer).map_err(|_| (JsonToolsError::invalid_json(), None))?;
+            Value::deserialize(deserializer).map_err(|_| (JsonCdpError::invalid_json(), None))?;
         let mut obj = match value {
             Value::Object(obj) => obj,
-            _ => return Err((JsonToolsError::must_be_object(), None)),
+            _ => return Err((JsonCdpError::must_be_object(), None)),
         };
         let id = obj.get("id")
             .and_then(Value::as_u64)
-            .ok_or_else(|| (JsonToolsError::must_have_id(), None))?;
+            .ok_or_else(|| (JsonCdpError::must_have_id(), None))?;
         let method = obj.remove("method")
             .and_then(|value| match value {
                 Value::String(method) => Some(method),
                 _ => None,
             })
-            .ok_or_else(|| (JsonToolsError::must_have_method(), Some(id)))?;
+            .ok_or_else(|| (JsonCdpError::must_have_method(), Some(id)))?;
         let params = match obj.remove("params") {
             Some(Value::Object(params)) => params,
             _ => Map::new(),
         };
-        Ok(JsonToolsIncoming {
+        Ok(JsonCdpIncoming {
             id: id,
             command_name: method,
             command_params: params,
         })
     }
 
-    pub fn parse_from_reader<T>(reader: T) -> Result<Self, (JsonToolsError, Option<u64>)>
+    pub fn parse_from_reader<T>(reader: T) -> Result<Self, (JsonCdpError, Option<u64>)>
     where
         T: Read,
     {
-        JsonToolsIncoming::parse(&mut serde_json::Deserializer::from_reader(reader))
+        JsonCdpIncoming::parse(&mut serde_json::Deserializer::from_reader(reader))
     }
 
-    pub fn parse_from_str(src: &str) -> Result<Self, (JsonToolsError, Option<u64>)> {
-        JsonToolsIncoming::parse(&mut serde_json::Deserializer::from_str(src))
+    pub fn parse_from_str(src: &str) -> Result<Self, (JsonCdpError, Option<u64>)> {
+        JsonCdpIncoming::parse(&mut serde_json::Deserializer::from_str(src))
     }
 
-    pub fn parse_from_slice(src: &[u8]) -> Result<Self, (JsonToolsError, Option<u64>)> {
-        JsonToolsIncoming::parse(&mut serde_json::Deserializer::from_slice(src))
+    pub fn parse_from_slice(src: &[u8]) -> Result<Self, (JsonCdpError, Option<u64>)> {
+        JsonCdpIncoming::parse(&mut serde_json::Deserializer::from_slice(src))
     }
 
     pub fn serialize<S, C>(serializer: S, id: u64, command: &C) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
-        C: SerializeToolsCommand,
+        C: SerializeCdpCommand,
     {
         struct CommandParams<'a, C: 'a>(&'a C);
 
         impl<'a, C> Serialize for CommandParams<'a, C>
         where
-            C: SerializeToolsCommand,
+            C: SerializeCdpCommand,
         {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
@@ -87,7 +141,7 @@ impl JsonToolsIncoming {
             }
         }
 
-        let mut state = serializer.serialize_struct("JsonToolsIncoming", 3)?;
+        let mut state = serializer.serialize_struct("JsonCdpIncoming", 3)?;
         state.serialize_field("id", &id)?;
         state.serialize_field("method", command.command_name())?;
         state.serialize_field("params", &CommandParams(command))?;
@@ -101,10 +155,10 @@ impl JsonToolsIncoming {
     ) -> Result<(), serde_json::Error>
     where
         W: Write,
-        C: SerializeToolsCommand,
+        C: SerializeCdpCommand,
     {
         let mut serializer = serde_json::Serializer::new(writer);
-        JsonToolsIncoming::serialize(&mut serializer, id, command)
+        JsonCdpIncoming::serialize(&mut serializer, id, command)
     }
 
     pub fn serialize_to_string<C>(
@@ -113,67 +167,67 @@ impl JsonToolsIncoming {
         command: &C,
     ) -> Result<(), serde_json::Error>
     where
-        C: SerializeToolsCommand,
+        C: SerializeCdpCommand,
     {
         // serde_json won't produce invalid UTF-8.
-        JsonToolsIncoming::serialize_to_writer(unsafe { string.as_mut_vec() }, id, command)
+        JsonCdpIncoming::serialize_to_writer(unsafe { string.as_mut_vec() }, id, command)
     }
 }
 
 // Outgoing Messages (from the server, to the client)
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum JsonToolsOutgoing {
+pub enum JsonCdpOutgoing {
     Result {
         id: u64,
-        result: Result<Map<String, Value>, JsonToolsError>,
+        result: Result<Map<String, Value>, JsonCdpError>,
     },
     Event {
         name: String,
         params: Map<String, Value>,
     },
-    Error(JsonToolsError),
+    Error(JsonCdpError),
 }
 
-impl JsonToolsOutgoing {
+impl JsonCdpOutgoing {
     pub fn serialize_result<S, R>(
         serializer: S,
         id: u64,
-        result: Result<&R, &JsonToolsError>,
+        result: Result<&R, &JsonCdpError>,
     ) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
         R: Serialize,
     {
         match result {
-            Ok(response) => JsonToolsOutgoing::serialize_response(serializer, id, response),
-            Err(error) => JsonToolsOutgoing::serialize_error(serializer, Some(id), error),
+            Ok(response) => JsonCdpOutgoing::serialize_response(serializer, id, response),
+            Err(error) => JsonCdpOutgoing::serialize_error(serializer, Some(id), error),
         }
     }
 
     pub fn serialize_result_to_writer<W, R>(
         writer: W,
         id: u64,
-        result: Result<&R, &JsonToolsError>,
+        result: Result<&R, &JsonCdpError>,
     ) -> Result<(), serde_json::Error>
     where
         W: Write,
         R: Serialize,
     {
         let mut serializer = serde_json::Serializer::new(writer);
-        JsonToolsOutgoing::serialize_result(&mut serializer, id, result)
+        JsonCdpOutgoing::serialize_result(&mut serializer, id, result)
     }
 
     pub fn serialize_result_to_string<R>(
         string: &mut String,
         id: u64,
-        result: Result<&R, &JsonToolsError>,
+        result: Result<&R, &JsonCdpError>,
     ) -> Result<(), serde_json::Error>
     where
         R: Serialize,
     {
         // serde_json won't produce invalid UTF-8.
-        JsonToolsOutgoing::serialize_result_to_writer(unsafe { string.as_mut_vec() }, id, result)
+        JsonCdpOutgoing::serialize_result_to_writer(unsafe { string.as_mut_vec() }, id, result)
     }
 
     pub fn serialize_response<S, R>(
@@ -199,7 +253,7 @@ impl JsonToolsOutgoing {
             }
         }
 
-        let mut state = serializer.serialize_struct("JsonToolsOutgoing", 2)?;
+        let mut state = serializer.serialize_struct("JsonCdpOutgoing", 2)?;
         state.serialize_field("id", &id)?;
         state.serialize_field("result", &ResponseParams(response))?;
         state.end()
@@ -215,7 +269,7 @@ impl JsonToolsOutgoing {
         R: Serialize,
     {
         let mut serializer = serde_json::Serializer::new(writer);
-        JsonToolsOutgoing::serialize_response(&mut serializer, id, response)
+        JsonCdpOutgoing::serialize_response(&mut serializer, id, response)
     }
 
     pub fn serialize_response_to_string<R>(
@@ -226,7 +280,7 @@ impl JsonToolsOutgoing {
     where
         R: Serialize,
     {
-        JsonToolsOutgoing::serialize_response_to_writer(
+        JsonCdpOutgoing::serialize_response_to_writer(
             // serde_json won't produce invalid UTF-8.
             unsafe { string.as_mut_vec() },
             id,
@@ -237,13 +291,13 @@ impl JsonToolsOutgoing {
     pub fn serialize_error<S>(
         serializer: S,
         id: Option<u64>,
-        error: &JsonToolsError,
+        error: &JsonCdpError,
     ) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         let n = if id.is_some() { 2 } else { 1 };
-        let mut state = serializer.serialize_struct("JsonToolsOutgoing", n)?;
+        let mut state = serializer.serialize_struct("JsonCdpOutgoing", n)?;
         if let Some(id) = id {
             state.serialize_field("id", &id)?;
         }
@@ -254,34 +308,34 @@ impl JsonToolsOutgoing {
     pub fn serialize_error_to_writer<W>(
         writer: W,
         id: Option<u64>,
-        error: &JsonToolsError,
+        error: &JsonCdpError,
     ) -> Result<(), serde_json::Error>
     where
         W: Write,
     {
         let mut serializer = serde_json::Serializer::new(writer);
-        JsonToolsOutgoing::serialize_error(&mut serializer, id, error)
+        JsonCdpOutgoing::serialize_error(&mut serializer, id, error)
     }
 
     pub fn serialize_error_to_string(
         string: &mut String,
         id: Option<u64>,
-        error: &JsonToolsError,
+        error: &JsonCdpError,
     ) -> Result<(), serde_json::Error> {
         // serde_json won't produce invalid UTF-8.
-        JsonToolsOutgoing::serialize_error_to_writer(unsafe { string.as_mut_vec() }, id, error)
+        JsonCdpOutgoing::serialize_error_to_writer(unsafe { string.as_mut_vec() }, id, error)
     }
 
     pub fn serialize_event<E, S>(serializer: S, event: &E) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
-        E: SerializeToolsEvent,
+        E: SerializeCdpEvent,
     {
         struct EventParams<'a, C: 'a>(&'a C);
 
         impl<'a, C> Serialize for EventParams<'a, C>
         where
-            C: SerializeToolsEvent,
+            C: SerializeCdpEvent,
         {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
@@ -291,7 +345,7 @@ impl JsonToolsOutgoing {
             }
         }
 
-        let mut state = serializer.serialize_struct("JsonToolsOutgoing", 2)?;
+        let mut state = serializer.serialize_struct("JsonCdpOutgoing", 2)?;
         state.serialize_field("method", event.event_name())?;
         state.serialize_field("params", &EventParams(event))?;
         state.end()
@@ -300,10 +354,10 @@ impl JsonToolsOutgoing {
     pub fn serialize_event_to_writer<W, E>(writer: W, event: &E) -> Result<(), serde_json::Error>
     where
         W: Write,
-        E: SerializeToolsEvent,
+        E: SerializeCdpEvent,
     {
         let mut serializer = serde_json::Serializer::new(writer);
-        JsonToolsOutgoing::serialize_event(&mut serializer, event)
+        JsonCdpOutgoing::serialize_event(&mut serializer, event)
     }
 
     pub fn serialize_event_to_string<E>(
@@ -311,68 +365,68 @@ impl JsonToolsOutgoing {
         event: &E,
     ) -> Result<(), serde_json::Error>
     where
-        E: SerializeToolsEvent,
+        E: SerializeCdpEvent,
     {
         // serde_json won't produce invalid UTF-8.
-        JsonToolsOutgoing::serialize_event_to_writer(unsafe { string.as_mut_vec() }, event)
+        JsonCdpOutgoing::serialize_event_to_writer(unsafe { string.as_mut_vec() }, event)
     }
 }
 
-impl Serialize for JsonToolsOutgoing {
+impl Serialize for JsonCdpOutgoing {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         match *self {
-            JsonToolsOutgoing::Result { id, ref result } => {
-                JsonToolsOutgoing::serialize_result(serializer, id, result.as_ref())
+            JsonCdpOutgoing::Result { id, ref result } => {
+                JsonCdpOutgoing::serialize_result(serializer, id, result.as_ref())
             }
-            JsonToolsOutgoing::Event {
+            JsonCdpOutgoing::Event {
                 ref name,
                 ref params,
-            } => JsonToolsOutgoing::serialize_event(serializer, &(name.as_str(), params)),
-            JsonToolsOutgoing::Error(ref error) => {
-                JsonToolsOutgoing::serialize_error(serializer, None, error)
+            } => JsonCdpOutgoing::serialize_event(serializer, &(name.as_str(), params)),
+            JsonCdpOutgoing::Error(ref error) => {
+                JsonCdpOutgoing::serialize_error(serializer, None, error)
             }
         }
     }
 }
 
-impl<'de> Deserialize<'de> for JsonToolsOutgoing {
+impl<'de> Deserialize<'de> for JsonCdpOutgoing {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        Ok(JsonToolsOutgoingImpl::deserialize(deserializer)?.into())
+        Ok(JsonCdpOutgoingImpl::deserialize(deserializer)?.into())
     }
 }
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(untagged)]
-enum JsonToolsOutgoingImpl {
+enum JsonCdpOutgoingImpl {
     CommandSuccess { id: u64, result: Map<String, Value> },
-    CommandFailure { id: u64, error: JsonToolsError },
-    GeneralFailure { error: JsonToolsError },
+    CommandFailure { id: u64, error: JsonCdpError },
+    GeneralFailure { error: JsonCdpError },
     Event {
         method: String,
         params: Map<String, Value>,
     },
 }
 
-impl From<JsonToolsOutgoingImpl> for JsonToolsOutgoing {
+impl From<JsonCdpOutgoingImpl> for JsonCdpOutgoing {
     #[inline]
-    fn from(message: JsonToolsOutgoingImpl) -> Self {
+    fn from(message: JsonCdpOutgoingImpl) -> Self {
         match message {
-            JsonToolsOutgoingImpl::GeneralFailure { error } => JsonToolsOutgoing::Error(error),
-            JsonToolsOutgoingImpl::CommandSuccess { id, result } => JsonToolsOutgoing::Result {
+            JsonCdpOutgoingImpl::GeneralFailure { error } => JsonCdpOutgoing::Error(error),
+            JsonCdpOutgoingImpl::CommandSuccess { id, result } => JsonCdpOutgoing::Result {
                 id: id,
                 result: Ok(result),
             },
-            JsonToolsOutgoingImpl::CommandFailure { id, error } => JsonToolsOutgoing::Result {
+            JsonCdpOutgoingImpl::CommandFailure { id, error } => JsonCdpOutgoing::Result {
                 id: id,
                 result: Err(error),
             },
-            JsonToolsOutgoingImpl::Event { method, params } => JsonToolsOutgoing::Event {
+            JsonCdpOutgoingImpl::Event { method, params } => JsonCdpOutgoing::Event {
                 name: method,
                 params: params,
             },
@@ -383,19 +437,19 @@ impl From<JsonToolsOutgoingImpl> for JsonToolsOutgoing {
 // Error
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct JsonToolsError {
+pub struct JsonCdpError {
     #[serde(rename = "code")]
-    pub kind: JsonToolsErrorKind,
+    pub kind: JsonCdpErrorKind,
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<Value>,
 }
 
-impl JsonToolsError {
+impl JsonCdpError {
     // https://github.com/nodejs/node/blob/8a8a6865c092637515b286cd9575ea592b5f501e/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L254
     pub fn invalid_json() -> Self {
-        JsonToolsError {
-            kind: JsonToolsErrorKind::ParseError,
+        JsonCdpError {
+            kind: JsonCdpErrorKind::ParseError,
             message: "Message must be a valid JSON".into(),
             data: None,
         }
@@ -403,8 +457,8 @@ impl JsonToolsError {
 
     // https://github.com/nodejs/node/blob/8a8a6865c092637515b286cd9575ea592b5f501e/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L259
     pub fn must_be_object() -> Self {
-        JsonToolsError {
-            kind: JsonToolsErrorKind::InvalidRequest,
+        JsonCdpError {
+            kind: JsonCdpErrorKind::InvalidRequest,
             message: "Message must be an object".into(),
             data: None,
         }
@@ -412,8 +466,8 @@ impl JsonToolsError {
 
     // https://github.com/nodejs/node/blob/8a8a6865c092637515b286cd9575ea592b5f501e/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L267
     pub fn must_have_id() -> Self {
-        JsonToolsError {
-            kind: JsonToolsErrorKind::InvalidRequest,
+        JsonCdpError {
+            kind: JsonCdpErrorKind::InvalidRequest,
             message: "Message must have integer 'id' porperty".into(), // not a typo
             data: None,
         }
@@ -421,8 +475,8 @@ impl JsonToolsError {
 
     // https://github.com/nodejs/node/blob/8a8a6865c092637515b286cd9575ea592b5f501e/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L275
     pub fn must_have_method() -> Self {
-        JsonToolsError {
-            kind: JsonToolsErrorKind::InvalidRequest,
+        JsonCdpError {
+            kind: JsonCdpErrorKind::InvalidRequest,
             message: "Message must have string 'method' porperty".into(), // not a typo
             data: None,
         }
@@ -430,8 +484,8 @@ impl JsonToolsError {
 
     // https://github.com/nodejs/node/blob/8a8a6865c092637515b286cd9575ea592b5f501e/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L283
     pub fn method_not_found(method: &str) -> Self {
-        JsonToolsError {
-            kind: JsonToolsErrorKind::MethodNotFound,
+        JsonCdpError {
+            kind: JsonCdpErrorKind::MethodNotFound,
             message: format!("'{}' wasn't found", method),
             data: None,
         }
@@ -439,8 +493,8 @@ impl JsonToolsError {
 
     // https://github.com/nodejs/node/blob/d74a545535868380b028c27dfcdf54e2d5f7c563/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L61
     pub fn invalid_params(message: String) -> Self {
-        JsonToolsError {
-            kind: JsonToolsErrorKind::InvalidParams,
+        JsonCdpError {
+            kind: JsonCdpErrorKind::InvalidParams,
             message: "Invalid parameters".into(),
             data: Some(Value::String(message)),
         }
@@ -448,8 +502,8 @@ impl JsonToolsError {
 
     // https://github.com/nodejs/node/blob/d74a545535868380b028c27dfcdf54e2d5f7c563/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L21-L29
     pub fn server_error(message: String) -> Self {
-        JsonToolsError {
-            kind: JsonToolsErrorKind::ServerError,
+        JsonCdpError {
+            kind: JsonCdpErrorKind::ServerError,
             message: message,
             data: None,
         }
@@ -457,21 +511,21 @@ impl JsonToolsError {
 
     // https://github.com/nodejs/node/blob/8a8a6865c092637515b286cd9575ea592b5f501e/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_cpp.template#L31-L39
     pub fn internal_error() -> Self {
-        JsonToolsError {
-            kind: JsonToolsErrorKind::InternalError,
+        JsonCdpError {
+            kind: JsonCdpErrorKind::InternalError,
             message: "Internal error".into(),
             data: None,
         }
     }
 }
 
-impl Error for JsonToolsError {
+impl Error for JsonCdpError {
     fn description(&self) -> &str {
         "DevTools error"
     }
 }
 
-impl fmt::Display for JsonToolsError {
+impl fmt::Display for JsonCdpError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.data {
             None => write!(
@@ -495,7 +549,7 @@ impl fmt::Display for JsonToolsError {
 
 // https://github.com/nodejs/node/blob/e506bcd899b3530ec69bdc00d5bac469b5753081/deps/v8/third_party/inspector_protocol/lib/DispatcherBase_h.template#L28-L35
 #[derive(Clone, Copy, Debug, Eq)]
-pub enum JsonToolsErrorKind {
+pub enum JsonCdpErrorKind {
     ParseError,
     InvalidRequest,
     MethodNotFound,
@@ -505,57 +559,57 @@ pub enum JsonToolsErrorKind {
     Other(i32),
 }
 
-impl PartialEq for JsonToolsErrorKind {
+impl PartialEq for JsonCdpErrorKind {
     fn eq(&self, other: &Self) -> bool {
         i32::from(*self) == i32::from(*other)
     }
 }
 
-impl fmt::Display for JsonToolsErrorKind {
+impl fmt::Display for JsonCdpErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            JsonToolsErrorKind::ParseError => write!(f, "parse error"),
-            JsonToolsErrorKind::InvalidRequest => write!(f, "invalid request"),
-            JsonToolsErrorKind::MethodNotFound => write!(f, "method not found"),
-            JsonToolsErrorKind::InvalidParams => write!(f, "invalid parameters"),
-            JsonToolsErrorKind::InternalError => write!(f, "internal error"),
-            JsonToolsErrorKind::ServerError => write!(f, "server error"),
-            JsonToolsErrorKind::Other(code) => write!(f, "code {}", code),
+            JsonCdpErrorKind::ParseError => write!(f, "parse error"),
+            JsonCdpErrorKind::InvalidRequest => write!(f, "invalid request"),
+            JsonCdpErrorKind::MethodNotFound => write!(f, "method not found"),
+            JsonCdpErrorKind::InvalidParams => write!(f, "invalid parameters"),
+            JsonCdpErrorKind::InternalError => write!(f, "internal error"),
+            JsonCdpErrorKind::ServerError => write!(f, "server error"),
+            JsonCdpErrorKind::Other(code) => write!(f, "code {}", code),
         }
     }
 }
 
-impl From<i32> for JsonToolsErrorKind {
+impl From<i32> for JsonCdpErrorKind {
     #[cfg_attr(feature = "clippy", allow(unreadable_literal))]
     fn from(code: i32) -> Self {
         match code {
-            -32700 => JsonToolsErrorKind::ParseError,
-            -32600 => JsonToolsErrorKind::InvalidRequest,
-            -32601 => JsonToolsErrorKind::MethodNotFound,
-            -32602 => JsonToolsErrorKind::InvalidParams,
-            -32603 => JsonToolsErrorKind::InternalError,
-            -32000 => JsonToolsErrorKind::ServerError,
-            _ => JsonToolsErrorKind::Other(code),
+            -32700 => JsonCdpErrorKind::ParseError,
+            -32600 => JsonCdpErrorKind::InvalidRequest,
+            -32601 => JsonCdpErrorKind::MethodNotFound,
+            -32602 => JsonCdpErrorKind::InvalidParams,
+            -32603 => JsonCdpErrorKind::InternalError,
+            -32000 => JsonCdpErrorKind::ServerError,
+            _ => JsonCdpErrorKind::Other(code),
         }
     }
 }
 
-impl From<JsonToolsErrorKind> for i32 {
+impl From<JsonCdpErrorKind> for i32 {
     #[cfg_attr(feature = "clippy", allow(unreadable_literal))]
-    fn from(kind: JsonToolsErrorKind) -> Self {
+    fn from(kind: JsonCdpErrorKind) -> Self {
         match kind {
-            JsonToolsErrorKind::ParseError => -32700,
-            JsonToolsErrorKind::InvalidRequest => -32600,
-            JsonToolsErrorKind::MethodNotFound => -32601,
-            JsonToolsErrorKind::InvalidParams => -32602,
-            JsonToolsErrorKind::InternalError => -32603,
-            JsonToolsErrorKind::ServerError => -32000,
-            JsonToolsErrorKind::Other(code) => code,
+            JsonCdpErrorKind::ParseError => -32700,
+            JsonCdpErrorKind::InvalidRequest => -32600,
+            JsonCdpErrorKind::MethodNotFound => -32601,
+            JsonCdpErrorKind::InvalidParams => -32602,
+            JsonCdpErrorKind::InternalError => -32603,
+            JsonCdpErrorKind::ServerError => -32000,
+            JsonCdpErrorKind::Other(code) => code,
         }
     }
 }
 
-impl Serialize for JsonToolsErrorKind {
+impl Serialize for JsonCdpErrorKind {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -564,7 +618,7 @@ impl Serialize for JsonToolsErrorKind {
     }
 }
 
-impl<'de> Deserialize<'de> for JsonToolsErrorKind {
+impl<'de> Deserialize<'de> for JsonCdpErrorKind {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
