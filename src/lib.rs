@@ -34,4 +34,6 @@ macro_rules! cdp_default_remote_port {
 
 pub const DEFAULT_REMOTE_PORT: u16 = cdp_default_remote_port!();
 
-include!(concat!(env!("OUT_DIR"), "/constants.rs"));
+#[macro_export]
+macro_rules ! cdp_stable_protocol_version { ( ) => ( "1.2" ) }
+pub const STABLE_PROTOCOL_VERSION: &'static str = cdp_stable_protocol_version!();

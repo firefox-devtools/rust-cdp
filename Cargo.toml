@@ -1,4 +1,3 @@
-# Lines containing "build" are deleted during baking (see bake.sh).
 
 [package]
 name = "cdp"
@@ -15,7 +14,6 @@ description = """
 Chrome DevTools Protocol types and (de)serialization for Rust
 """
 categories = ["network-programming"]
-build = "src/generate.rs"
 
 [badges]
 travis-ci = { repository = "devtools-html/cdp" }
@@ -38,20 +36,7 @@ optional = true
 version = "0.2"
 optional = true
 
-[build-dependencies]
-Inflector = "0.10" #build
-lazy_static = "0.2" #build
-petgraph = "0.4" #build
-quote = "0.3" #build
-regex = "0.2" #build
-rustfmt = "0.9" #build
-serde = "1.0" #build
-serde_derive = "1.0" #build
-serde_json = "1.0" #build
 
-[build-dependencies.clippy]
-version = "*" #build
-optional = true #build
 
 [features]
 default = ["proto", "ws"]
