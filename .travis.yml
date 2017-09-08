@@ -1,7 +1,7 @@
 language: rust
 matrix:
   include:
-    linux
+    # linux
     - rust: stable
       os: linux
     - rust: beta
@@ -9,7 +9,7 @@ matrix:
     - rust: nightly
       os: linux
       env: STRICT=true
-    osx
+    # osx
     - rust: stable
       os: osx
     - rust: beta
