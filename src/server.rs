@@ -31,10 +31,8 @@ pub trait CdpServerCommand: Sized {
 }
 
 /// A handle which grants the ability to respond to a particular command sent by
-/// the client.
-///
-/// Calling any of the methods except `event_sender` on this trait will consume
-/// the responder and submit a response to the client.
+/// the client. Calling any of the methods on this trait will consume the
+/// responder and submit a response to the client.
 ///
 /// Responding to a command may be comprised of two parts: *encoding* the
 /// response itself and attempting to *dispatch* the encoded response to the
@@ -49,16 +47,6 @@ pub trait CdpServerCommand: Sized {
 pub trait CdpServerResponder: Sized {
     /// The type of a respond error.
     type Error: Error;
-
-    /// A cloneable handle which grants the ability to push events to the same
-    /// client which would receive a response submitted through this
-    /// `CdpServerResponder`.
-    type EventSender: CdpServerEventSender<Error = Self::Error>;
-
-    /// Generate a cloneable handle which grants the ability to push events to
-    /// the same client which would receive a response submitted through this
-    /// `CdpServerResponder`.
-    fn event_sender(&self) -> Self::EventSender;
 
     /// Send back a successful response.
     fn respond<R>(self, response: &R) -> Result<(), Self::Error>
