@@ -35,6 +35,17 @@ pub trait CdpServerCommand: Sized {
 ///
 /// Calling any of the methods except `event_sender` on this trait will consume
 /// the responder and submit a response to the client.
+///
+/// Responding to a command may be comprised of two parts: *encoding* the
+/// response itself and attempting to *dispatch* the encoded response to the
+/// client; either of these may fail. Implementations of this trait should
+/// attempt to *dispatch* a response to the client exactly once within their
+/// lifecycle. If an instance is dropped without having attempted to dispatch a
+/// response to the client, it should try to send an `internal_error`. This
+/// includes the case where the end use of the implementation did not call any
+/// of the response methods before allowing the instance to drop, as well as the
+/// case where a response method was called but the *encoding* of the response
+/// failed.
 pub trait CdpServerResponder: Sized {
     /// The type of a respond error.
     type Error: Error;
@@ -50,10 +61,6 @@ pub trait CdpServerResponder: Sized {
     fn event_sender(&self) -> Self::EventSender;
 
     /// Send back a successful response.
-    ///
-    /// If an error is encountered serializing the response, implementations of
-    /// this trait should attempt to send an `internal_error` back to the
-    /// client, in addition to returning `Err` from this method.
     fn respond<R>(self, response: &R) -> Result<(), Self::Error>
     where
         R: Serialize;
