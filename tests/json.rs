@@ -15,8 +15,9 @@ mod helper;
 
 use serde_json::{Map, Value};
 
-use cdp::json::{JsonCdpError, JsonCdpIncoming, JsonCdpOutgoing};
+use cdp::json::{JsonCdpError, JsonCdpIncoming, JsonCdpOutgoing, JsonCdpServerCommand};
 use cdp::proto::page;
+use cdp::server::CdpServerCommand;
 
 #[test]
 fn test_incoming_page_navigate() {
@@ -238,4 +239,21 @@ fn test_outgoing_error() {
     JsonCdpOutgoing::serialize_error_to_string(&mut serialized, None, &error)
         .expect("serialize error");
     assert_eq!(json, &serialized);
+}
+
+#[test]
+fn test_server_command() {
+    let name = "Foo.bar";
+
+    let mut params = Map::new();
+    params.insert("Hello".into(), Value::String("World".into()));
+
+    let command = JsonCdpServerCommand::new(name.into(), params.clone());
+
+    let deserialize_result = command.deserialize_command();
+    #[cfg_attr(feature = "clippy", allow(ok_expect))]
+    let deserialize_result = deserialize_result.ok().expect("command not recognized");
+    let deserialized_command: (String, Map<String, Value>) =
+        deserialize_result.expect("deserialize error");
+    assert_eq!(deserialized_command, (name.into(), params));
 }

@@ -3,6 +3,7 @@
 // obtain one at http://mozilla.org/MPL/2.0/.
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::Visitor;
 use serde::ser::SerializeStruct;
 use serde_json::{self, Map, Value};
 use std::borrow::Cow;
@@ -10,9 +11,23 @@ use std::error::Error;
 use std::fmt;
 use std::io::{Read, Write};
 
-use traits::{SerializeCdpCommand, SerializeCdpEvent};
+use server::CdpServerCommand;
+use traits::{DeserializeCdpCommand, DeserializeCdpEvent, SerializeCdpCommand, SerializeCdpEvent};
 
 // JSON Serialization Impls
+
+impl<'de> DeserializeCdpCommand<'de> for (String, Map<String, Value>) {
+    fn deserialize_command<D>(
+        command_name: &str,
+        command_params: D,
+    ) -> Result<Result<Self, D::Error>, D>
+    where
+        D: Deserializer<'de>
+    {
+        let deserialize_result = Map::<String, Value>::deserialize(command_params);
+        Ok(deserialize_result.map(|params| (command_name.into(), params)))
+    }
+}
 
 impl SerializeCdpCommand for (String, Map<String, Value>) {
     fn command_name(&self) -> &str {
@@ -40,6 +55,19 @@ impl<'a> SerializeCdpCommand for (&'a str, &'a Map<String, Value>) {
     }
 }
 
+impl<'de> DeserializeCdpEvent<'de> for (String, Map<String, Value>) {
+    fn deserialize_event<D>(
+        event_name: &str,
+        event_params: D,
+    ) -> Result<Result<Self, D::Error>, D>
+    where
+        D: Deserializer<'de>
+    {
+        let deserialize_result = Map::<String, Value>::deserialize(event_params);
+        Ok(deserialize_result.map(|params| (event_name.into(), params)))
+    }
+}
+
 impl SerializeCdpEvent for (String, Map<String, Value>) {
     fn event_name(&self) -> &str {
         &self.0
@@ -63,6 +91,44 @@ impl<'a> SerializeCdpEvent for (&'a str, &'a Map<String, Value>) {
         S: Serializer,
     {
         self.1.serialize(serializer)
+    }
+}
+
+// JSON Server Command Implementation
+
+#[derive(Clone, Debug)]
+pub struct JsonCdpServerCommand {
+    name: String,
+    params: Map<String, Value>,
+}
+
+impl JsonCdpServerCommand {
+    pub fn new(name: String, params: Map<String, Value>) -> Self {
+        JsonCdpServerCommand {
+            name: name,
+            params: params,
+        }
+    }
+}
+
+impl CdpServerCommand for JsonCdpServerCommand {
+    type Error = serde_json::Error;
+
+    fn command_name(&self) -> &str {
+        &self.name
+    }
+
+    fn deserialize_command<C>(self) -> Result<Result<C, Self::Error>, Self>
+    where
+        C: for<'de> DeserializeCdpCommand<'de>,
+    {
+        let JsonCdpServerCommand { name, params } = self;
+        C::deserialize_command(&name, MapDeserializer(params)).map_err(move |params| {
+            JsonCdpServerCommand {
+                name: name,
+                params: params.0,
+            }
+        })
     }
 }
 
@@ -625,5 +691,211 @@ impl<'de> Deserialize<'de> for JsonCdpErrorKind {
         D: Deserializer<'de>,
     {
         Ok(i32::deserialize(deserializer)?.into())
+    }
+}
+
+// Deserialize directly to a Map<String, Value>
+
+struct MapDeserializer(Map<String, Value>);
+
+impl<'de> Deserializer<'de> for MapDeserializer {
+    type Error = <Value as Deserializer<'de>>::Error;
+
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_any(visitor)
+    }
+    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_bool(visitor)
+    }
+    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_i8(visitor)
+    }
+    fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_i16(visitor)
+    }
+    fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_i32(visitor)
+    }
+    fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_i64(visitor)
+    }
+    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_u8(visitor)
+    }
+    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_u16(visitor)
+    }
+    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_u32(visitor)
+    }
+    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_u64(visitor)
+    }
+    fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_f32(visitor)
+    }
+    fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_f64(visitor)
+    }
+    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_char(visitor)
+    }
+    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_str(visitor)
+    }
+    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_string(visitor)
+    }
+    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_bytes(visitor)
+    }
+    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_byte_buf(visitor)
+    }
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_option(visitor)
+    }
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_unit(visitor)
+    }
+    fn deserialize_unit_struct<V>(
+        self,
+        name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_unit_struct(name, visitor)
+    }
+    fn deserialize_newtype_struct<V>(
+        self,
+        name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_newtype_struct(name, visitor)
+    }
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_seq(visitor)
+    }
+    fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_tuple(len, visitor)
+    }
+    fn deserialize_tuple_struct<V>(
+        self,
+        name: &'static str,
+        len: usize,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_tuple_struct(name, len, visitor)
+    }
+    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_map(visitor)
+    }
+    fn deserialize_struct<V>(
+        self,
+        name: &'static str,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_struct(name, fields, visitor)
+    }
+    fn deserialize_enum<V>(
+        self,
+        name: &'static str,
+        variants: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_enum(name, variants, visitor)
+    }
+    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_identifier(visitor)
+    }
+    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Value::Object(self.0).deserialize_ignored_any(visitor)
     }
 }

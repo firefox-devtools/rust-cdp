@@ -44,7 +44,7 @@ pub trait CdpServerCommand: Sized {
 /// of the response methods before allowing the instance to drop, as well as the
 /// case where a response method was called but the *encoding* of the response
 /// failed.
-pub trait CdpServerResponder: Sized {
+pub trait CdpServerResponder: Sized + Drop {
     /// The type of a respond error.
     type Error: Error;
 
