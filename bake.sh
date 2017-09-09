@@ -7,8 +7,10 @@
 set -eufo pipefail
 
 # Do a fresh build to ensure that all the source files we'll need are generated.
-cargo clean -p cdp
-cargo build
+if [[ "${1:-}" != "--skip-build" ]]; then
+  cargo clean -p cdp
+  cargo build
+fi
 
 # Initialize the output directory.
 rm -rf target/bake/
