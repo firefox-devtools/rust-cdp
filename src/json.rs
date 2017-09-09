@@ -22,7 +22,7 @@ impl<'de> DeserializeCdpCommand<'de> for (String, Map<String, Value>) {
         command_params: D,
     ) -> Result<Result<Self, D::Error>, D>
     where
-        D: Deserializer<'de>
+        D: Deserializer<'de>,
     {
         let deserialize_result = Map::<String, Value>::deserialize(command_params);
         Ok(deserialize_result.map(|params| (command_name.into(), params)))
@@ -56,12 +56,9 @@ impl<'a> SerializeCdpCommand for (&'a str, &'a Map<String, Value>) {
 }
 
 impl<'de> DeserializeCdpEvent<'de> for (String, Map<String, Value>) {
-    fn deserialize_event<D>(
-        event_name: &str,
-        event_params: D,
-    ) -> Result<Result<Self, D::Error>, D>
+    fn deserialize_event<D>(event_name: &str, event_params: D) -> Result<Result<Self, D::Error>, D>
     where
-        D: Deserializer<'de>
+        D: Deserializer<'de>,
     {
         let deserialize_result = Map::<String, Value>::deserialize(event_params);
         Ok(deserialize_result.map(|params| (event_name.into(), params)))
