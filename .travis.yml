@@ -37,7 +37,7 @@ script:
       travis_wait cargo test --verbose;
     fi
   - travis_wait cargo doc --verbose --no-deps
-  - if [ "$STRICT" = true ]; then
+  - if [ "$RUSTFMT" = true ]; then
       travis_wait cargo install --git 'https://github.com/rust-lang-nursery/rustfmt' --verbose;
     fi
   - if [ "$RUSTFMT" = true ]; then pushd cdp; fi
