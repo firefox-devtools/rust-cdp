@@ -25,4 +25,4 @@ extern crate cdp;
 
 ## License
 
-Please see [LICENSE.md](/LICENSE.md).
+Please see [LICENSE.md](https://github.com/devtools-html/rust-cdp/blob/master/cdp/LICENSE.md).
