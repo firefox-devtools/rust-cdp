@@ -81,7 +81,9 @@ pub struct ToolsServer<T> {
 
 impl<T> fmt::Debug for ToolsServer<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("ToolsServer").field("ws_transport", &Omitted).finish()
+        f.debug_struct("ToolsServer")
+            .field("ws_transport", &Omitted)
+            .finish()
     }
 }
 

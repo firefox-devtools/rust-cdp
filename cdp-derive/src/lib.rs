@@ -118,12 +118,18 @@ fn generate_cdp_deserialize_impl(input: &DeriveInput, kind: &str) -> Result<Toke
 fn generate_cdp_deserialize_impl_generics(
     generics: &Generics,
 ) -> (Tokens, TyGenerics, &WhereClause, String) {
-    let max_lifetime_len =
-        generics.lifetimes.iter().map(|x| x.lifetime.ident.as_ref().len() - 1).max().unwrap_or(0);
+    let max_lifetime_len = generics
+        .lifetimes
+        .iter()
+        .map(|x| x.lifetime.ident.as_ref().len() - 1)
+        .max()
+        .unwrap_or(0);
     let unique_lifetime_prefix = "_".repeat(max_lifetime_len);
 
     let mut quant_generics = generics.clone();
-    quant_generics.lifetimes.insert(0, LifetimeDef::new(format!("'{}de", unique_lifetime_prefix)));
+    quant_generics
+        .lifetimes
+        .insert(0, LifetimeDef::new(format!("'{}de", unique_lifetime_prefix)));
     let (quantification, _, _) = quant_generics.split_for_impl();
 
     let (_, ty_generics, where_clause) = generics.split_for_impl();
@@ -224,9 +230,12 @@ fn generate_cdp_deserialize_impl_arm(
             let params_ty = &params.ty;
 
             let convert_name = quote! { ::std::convert::From::from(name) };
-            let field_idents = name.ident.as_ref().and_then(
-                |name_ident| params.ident.as_ref().map(|params_ident| (name_ident, params_ident)),
-            );
+            let field_idents = name.ident.as_ref().and_then(|name_ident| {
+                params
+                    .ident
+                    .as_ref()
+                    .map(|params_ident| (name_ident, params_ident))
+            });
             let populate = match field_idents {
                 None => quote! { |params| { #ctor(#convert_name, params) } },
                 Some((name_ident, params_ident)) => {

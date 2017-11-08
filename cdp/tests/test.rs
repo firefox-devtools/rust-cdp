@@ -89,7 +89,8 @@ fn test_command_page_navigate_serialize_cdp_command_impl() {
     assert_eq!("Page.navigate", rust.command_name());
 
     let mut serializer = serde_json::Serializer::new(Vec::new());
-    rust.serialize_command_params(&mut serializer).expect("serialize_command_params error");
+    rust.serialize_command_params(&mut serializer)
+        .expect("serialize_command_params error");
     assert_eq!(&json[..], serializer.into_inner().as_slice());
 }
 
@@ -144,7 +145,8 @@ fn test_command_page_enable_serialize_cdp_command_impl() {
     assert_eq!("Page.enable", rust.command_name());
 
     let mut serializer = serde_json::Serializer::new(Vec::new());
-    rust.serialize_command_params(&mut serializer).expect("serialize_command_params error");
+    rust.serialize_command_params(&mut serializer)
+        .expect("serialize_command_params error");
     assert_eq!(&json[..], serializer.into_inner().as_slice());
 }
 
@@ -213,7 +215,8 @@ fn test_event_page_dom_content_event_fired_serialize_cdp_event_impl() {
     assert_eq!("Page.domContentEventFired", rust.event_name());
 
     let mut serializer = serde_json::Serializer::new(Vec::new());
-    rust.serialize_event_params(&mut serializer).expect("serialize_event_params error");
+    rust.serialize_event_params(&mut serializer)
+        .expect("serialize_event_params error");
     assert_eq!(&json[..], serializer.into_inner().as_slice());
 }
 
@@ -260,7 +263,10 @@ fn test_incoming_page_navigate() {
     assert_eq!(
         command_value,
         Value::Object(
-            CdpIncoming::parse_from_str(json).expect("parse error").command_params.into()
+            CdpIncoming::parse_from_str(json)
+                .expect("parse error")
+                .command_params
+                .into()
         )
     );
     assert_eq!(command, serde_json::from_value(command_value.clone()).expect("from_value error"));

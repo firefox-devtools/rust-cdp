@@ -27,7 +27,7 @@ use tokio_core::net::TcpListener;
 use tokio_core::reactor::{Core, Handle};
 use tokio_service::Service;
 
-use tokio_cdp::greeter::{ActivateResponse, CloseResponse, Target, TargetKind, BrowserInfo,
+use tokio_cdp::greeter::{ActivateResponse, BrowserInfo, CloseResponse, Target, TargetKind,
                          WsEndpoint};
 use tokio_cdp::greeter::client::{GreeterClient, GreeterClientError};
 use tokio_cdp::greeter::server::{GreeterError, GreeterRequest, GreeterResponse, GreeterServer};
@@ -130,7 +130,10 @@ fn start_server() -> (Core, Handle, String, Arc<RefCell<Vec<Target<'static>>>>) 
 
     let server_addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0);
     let listener = TcpListener::bind(&server_addr, &handle).expect("listener bind error");
-    let server_addr = listener.local_addr().expect("server address retrieval error").to_string();
+    let server_addr = listener
+        .local_addr()
+        .expect("server address retrieval error")
+        .to_string();
 
     let targets = Arc::new(RefCell::new(vec![]));
 
@@ -165,8 +168,9 @@ fn test_greeter_browser() {
     let (mut core, handle, server_addr, _targets) = start_server();
     let client = GreeterClient::new(&handle, server_addr.clone());
 
-    let test =
-        client.browser().map(|browser_info| assert_eq!(browser_info, make_sample_browser_info()));
+    let test = client
+        .browser()
+        .map(|browser_info| assert_eq!(browser_info, make_sample_browser_info()));
     core.run(test).expect("client error");
 }
 
@@ -225,7 +229,11 @@ fn test_greeter_list_populated() {
 
     let test = client
         .open(None)
-        .and_then(move |_| client.open(Some("https://mozilla.org")).map(|x| (x, client)))
+        .and_then(move |_| {
+            client
+                .open(Some("https://mozilla.org"))
+                .map(|x| (x, client))
+        })
         .and_then(|(_, client)| client.list())
         .map(move |received_targets| {
             assert_eq!(
@@ -245,10 +253,12 @@ fn test_greeter_activate_nonexistent() {
     let (mut core, handle, server_addr, _targets) = start_server();
     let client = GreeterClient::new(&handle, server_addr.clone());
 
-    let test = client.activate("https://mozilla.org").and_then(move |response| {
-        assert_eq!(ActivateResponse::NotFound, response);
-        Ok(())
-    });
+    let test = client
+        .activate("https://mozilla.org")
+        .and_then(move |response| {
+            assert_eq!(ActivateResponse::NotFound, response);
+            Ok(())
+        });
     core.run(test).expect("client error");
 }
 
@@ -272,10 +282,12 @@ fn test_greeter_close_nonexistent() {
     let (mut core, handle, server_addr, _targets) = start_server();
     let client = GreeterClient::new(&handle, server_addr.clone());
 
-    let test = client.close("https://mozilla.org").and_then(move |response| {
-        assert_eq!(CloseResponse::NotFound, response);
-        Ok(())
-    });
+    let test = client
+        .close("https://mozilla.org")
+        .and_then(move |response| {
+            assert_eq!(CloseResponse::NotFound, response);
+            Ok(())
+        });
     core.run(test).expect("client error");
 }
 
@@ -299,8 +311,9 @@ fn test_greeter_methods() {
     let (mut core, handle, server_addr, _targets) = start_server();
     let http = hyper::Client::new(&handle);
 
-    let uri: Uri =
-        format!("http://{server_addr}/json", server_addr = server_addr).parse().unwrap();
+    let uri: Uri = format!("http://{server_addr}/json", server_addr = server_addr)
+        .parse()
+        .unwrap();
 
     // CDP servers pretty much ignore the method attached to the HTTP request.
     let methods = [
@@ -336,8 +349,11 @@ fn test_greeter_unknown_command() {
     let (mut core, handle, server_addr, _targets) = start_server();
     let http = hyper::Client::new(&handle);
 
-    let uri = format!("http://{server_addr}/foo", server_addr = server_addr).parse().unwrap();
-    let test = http.get(uri).map(|res| assert_eq!(res.status(), StatusCode::NotFound));
+    let uri = format!("http://{server_addr}/foo", server_addr = server_addr)
+        .parse()
+        .unwrap();
+    let test = http.get(uri)
+        .map(|res| assert_eq!(res.status(), StatusCode::NotFound));
     core.run(test).expect("http error");
 }
 

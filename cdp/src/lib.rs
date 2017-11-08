@@ -229,8 +229,9 @@ impl<'a> CdpIncoming<'a> {
             Value::Object(obj) => obj,
             _ => return Err((CdpError::must_be_object(), None)),
         };
-        let id =
-            obj.get("id").and_then(Value::as_u64).ok_or_else(|| (CdpError::must_have_id(), None))?;
+        let id = obj.get("id")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| (CdpError::must_have_id(), None))?;
         let method = obj.remove("method")
             .and_then(|value| match value {
                 Value::String(method) => Some(method),

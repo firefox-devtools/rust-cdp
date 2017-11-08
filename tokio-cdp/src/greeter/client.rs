@@ -61,14 +61,14 @@ impl GreeterClient {
     pub fn browser(&self) -> GreeterClientBrowser {
         let url = format!("http://{server_addr}/json/version", server_addr = self.server_addr);
         GreeterClientBrowser {
-            inner: self.request_json(url),
+            inner: self.request_json(&url),
         }
     }
 
     pub fn list(&self) -> GreeterClientList {
         let url = format!("http://{server_addr}/json/list", server_addr = self.server_addr);
         GreeterClientList {
-            inner: self.request_json(url),
+            inner: self.request_json(&url),
         }
     }
 
@@ -82,7 +82,7 @@ impl GreeterClient {
             ),
         };
         GreeterClientOpen {
-            inner: self.request_json(url),
+            inner: self.request_json(&url),
         }
     }
 
@@ -93,7 +93,7 @@ impl GreeterClient {
             id = id,
         );
         GreeterClientActivate {
-            inner: self.request(url),
+            inner: self.request(&url),
         }
     }
 
@@ -104,18 +104,18 @@ impl GreeterClient {
             id = id,
         );
         GreeterClientClose {
-            inner: self.request(url),
+            inner: self.request(&url),
         }
     }
 
     pub fn protocol(&self) -> GreeterClientProtocol {
         let url = format!("http://{server_addr}/json/protocol", server_addr = self.server_addr);
         GreeterClientProtocol {
-            inner: self.request(url),
+            inner: self.request(&url),
         }
     }
 
-    fn request(&self, request_url: String) -> GreeterClientRequest {
+    fn request(&self, request_url: &str) -> GreeterClientRequest {
         let request_uri = match request_url.parse() {
             Err(err) => return GreeterClientRequest::Err(Some(GreeterClientError::from(err))),
             Ok(request_uri) => request_uri,
@@ -123,11 +123,11 @@ impl GreeterClient {
         GreeterClientRequest::MakeRequest(self.inner.get(request_uri))
     }
 
-    fn request_body(&self, request_url: String) -> GreeterClientRequestBody {
+    fn request_body(&self, request_url: &str) -> GreeterClientRequestBody {
         GreeterClientRequestBody::MakeRequest(self.request(request_url))
     }
 
-    fn request_json<T>(&self, request_url: String) -> GreeterClientRequestJson<T>
+    fn request_json<T>(&self, request_url: &str) -> GreeterClientRequestJson<T>
     where
         T: for<'de> Deserialize<'de>,
     {
@@ -150,9 +150,10 @@ impl Future for GreeterClientRequest {
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         match *self {
-            GreeterClientRequest::Err(ref mut err) => {
-                Err(err.take().expect("tokio-cdp: GreeterClientRequest polled after error"))
-            }
+            GreeterClientRequest::Err(ref mut err) => Err(
+                err.take()
+                    .expect("tokio-cdp: GreeterClientRequest polled after error"),
+            ),
             GreeterClientRequest::MakeRequest(ref mut future) => future.poll().map_err(From::from),
         }
     }
@@ -203,7 +204,9 @@ where
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         let body = try_ready!(self.inner.poll());
-        serde_json::from_slice::<T>(&body).map(From::from).map_err(From::from)
+        serde_json::from_slice::<T>(&body)
+            .map(From::from)
+            .map_err(From::from)
     }
 }
 

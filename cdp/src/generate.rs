@@ -54,7 +54,9 @@ fn main() {
         panic!("json/browser_protocol.json and json/js_protocol.json versions don't match");
     }
 
-    browser_protocol.domains.extend_from_slice(&js_protocol.domains);
+    browser_protocol
+        .domains
+        .extend_from_slice(&js_protocol.domains);
 
     let generated_src = generate_rust_source(&browser_protocol);
     let generated_path = Path::new(&out_dir).join("generated.rs");
@@ -103,13 +105,15 @@ fn generate_version(version: &Version) -> Tokens {
             () => ( #version_string )
         }
 
-        pub const STABLE_PROTOCOL_VERSION: &'static str = cdp_stable_protocol_version!();
+        pub const STABLE_PROTOCOL_VERSION: &str = cdp_stable_protocol_version!();
     })
 }
 
 fn generate_domains(domains: &[Domain]) -> Tokens {
     let uses_lifetime_set = generate_uses_lifetime_set(domains);
-    let modules = domains.iter().map(|domain| generate_domain(domain, &uses_lifetime_set));
+    let modules = domains
+        .iter()
+        .map(|domain| generate_domain(domain, &uses_lifetime_set));
     quote!(#(#modules)*)
 }
 
@@ -465,8 +469,10 @@ fn generate_type_expr_impl(
                 generate_field_usage_note(domain_snake_case, parent_pascal_case, field_name);
             let meta_attrs =
                 generate_meta_attrs(deprecation_status, experimental, description, note);
-            let variants: Vec<Tokens> =
-                values.iter().map(|s| generate_type_enum_variant(s)).collect();
+            let variants: Vec<Tokens> = values
+                .iter()
+                .map(|s| generate_type_enum_variant(s))
+                .collect();
 
             let variant_ctors: Vec<Tokens> = values
                 .iter()
@@ -1024,7 +1030,9 @@ fn pascal_case<T>(src: T) -> String
 where
     T: AsRef<str>,
 {
-    replace_unsafe_chars(src.as_ref()).to_snake_case().to_pascal_case()
+    replace_unsafe_chars(src.as_ref())
+        .to_snake_case()
+        .to_pascal_case()
 }
 
 fn replace_unsafe_chars(src: &str) -> String {
@@ -1087,7 +1095,9 @@ where
             .expect("cdp: MARKDOWN_HAZARD_RE compilation failed");
     }
 
-    MARKDOWN_HAZARD_RE.replace_all(src.as_ref(), "\\$0").into_owned()
+    MARKDOWN_HAZARD_RE
+        .replace_all(src.as_ref(), "\\$0")
+        .into_owned()
 }
 
 #[derive(Clone)]
@@ -1111,13 +1121,13 @@ impl DeprecationStatus {
                 .expect("cdp: DEPRECATION_MESSAGE_RE compilation failed");
         }
 
-        let warning = description.as_ref().and_then(
-            |desc| if desc == "Deprecated." || !DEPRECATION_WARNING_RE.is_match(desc) {
+        let warning = description.as_ref().and_then(|desc| {
+            if desc == "Deprecated." || !DEPRECATION_WARNING_RE.is_match(desc) {
                 None
             } else {
                 Some(escape_for_markdown(DEPRECATION_PREFIX_RE.replace(desc, "")))
-            },
-        );
+            }
+        });
 
         match warning {
             None => DeprecationStatus::Deprecated,

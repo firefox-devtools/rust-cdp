@@ -234,13 +234,17 @@ where
 
         if let Some(handshake) = WsHandshake::detect(&req) {
             let maybe_endpoint = WS_ENDPOINT_RE.captures(req.path()).and_then(|captures| {
-                captures.get(1).and_then(|category| match category.as_str() {
-                    "browser" => {
-                        Some(WsEndpoint::Browser(captures.get(3).map(|id| id.as_str().into())))
-                    }
-                    "page" => captures.get(3).map(|id| WsEndpoint::Page(id.as_str().into())),
-                    _ => None,
-                })
+                captures
+                    .get(1)
+                    .and_then(|category| match category.as_str() {
+                        "browser" => {
+                            Some(WsEndpoint::Browser(captures.get(3).map(|id| id.as_str().into())))
+                        }
+                        "page" => captures
+                            .get(3)
+                            .map(|id| WsEndpoint::Page(id.as_str().into())),
+                        _ => None,
+                    })
             });
             return match maybe_endpoint {
                 None => GreeterServiceFuture::WsBadRequest,
@@ -278,11 +282,13 @@ where
                         };
                         Some(GreeterRequest::Close { id: id.to_owned() })
                     }
-                    command_str => return GreeterServiceFuture::HttpNotFound(Some(command_str.to_owned())),
-                }
-            }
+                    command_str => {
+                        return GreeterServiceFuture::HttpNotFound(Some(command_str.to_owned()))
+                    }
+                },
+            },
         };
-        
+
         match maybe_req {
             None => GreeterServiceFuture::HttpNotFound(None),
             Some(greeter_req) => {

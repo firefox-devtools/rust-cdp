@@ -292,8 +292,10 @@ impl DomainImpl {
                 .into_iter()
                 .map(MethodImpl::into_method)
                 .collect::<Result<_, _>>()?,
-            events:
-                self.events.into_iter().map(MethodImpl::into_method).collect::<Result<_, _>>()?,
+            events: self.events
+                .into_iter()
+                .map(MethodImpl::into_method)
+                .collect::<Result<_, _>>()?,
         })
     }
 }
@@ -419,8 +421,10 @@ impl MethodImpl {
                 .into_iter()
                 .map(FieldImpl::into_field)
                 .collect::<Result<_, _>>()?,
-            returns:
-                self.returns.into_iter().map(FieldImpl::into_field).collect::<Result<_, _>>()?,
+            returns: self.returns
+                .into_iter()
+                .map(FieldImpl::into_field)
+                .collect::<Result<_, _>>()?,
             redirect: self.redirect,
         })
     }
