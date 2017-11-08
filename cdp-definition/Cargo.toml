@@ -1,0 +1,33 @@
+[package]
+name = "cdp-definition"
+version = "0.1.0"
+authors = ["Michael Smith <michael@spinda.net>"]
+license = "MPL-2.0"
+readme = "README.md"
+keywords = ["chrome", "devtools", "protocol", "cdp", "chromium"]
+repository = "https://github.com/devtools-html/rust-cdp"
+homepage = "https://github.com/devtools-html/rust-cdp/tree/master/cdp-definition"
+documentation = "https://docs.rs/cdp-definition/0.1.0"
+description = """
+Types and (de)serialization for the Chrome DevTools Protocol definition JSON
+"""
+categories = ["network-programming"]
+
+[badges]
+travis-ci = { repository = "devtools-html/rust-cdp" }
+appveyor = { repository = "spinda/rust-cdp" }
+
+[dependencies]
+serde = "1.0.8"
+serde_derive = "1.0.8"
+
+[dependencies.clippy]
+version = "*"
+optional = true
+
+[dev-dependencies]
+serde_json = "1.0.2"
+
+[features]
+default = []
+strict = ["clippy"]

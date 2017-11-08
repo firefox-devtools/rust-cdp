@@ -1,0 +1,42 @@
+[package]
+name = "cdp-derive"
+version = "0.1.0"
+authors = ["Michael Smith <michael@spinda.net>"]
+license = "MPL-2.0"
+readme = "README.md"
+keywords = ["chrome", "devtools", "protocol", "cdp", "chromium"]
+repository = "https://github.com/devtools-html/rust-cdp"
+homepage = "https://github.com/devtools-html/rust-cdp/tree/master/cdp-derive"
+documentation = "https://docs.rs/cdp-derive/0.1.0"
+description = """
+Derive traits from the [`cdp`](https://crates.io/crates/cdp) library for the
+Chrome DevTools Protocol
+"""
+categories = ["network-programming"]
+
+[badges]
+travis-ci = { repository = "devtools-html/rust-cdp" }
+appveyor = { repository = "spinda/rust-cdp" }
+
+[lib]
+name = "cdp_derive"
+proc-macro = true
+
+[dependencies]
+quote = "0.3.15"
+syn = "0.11.11"
+
+[dependencies.clippy]
+version = "*"
+optional = true
+
+[dev-dependencies]
+serde = "1.0.8"
+serde_json = "1.0.2"
+
+[dev-dependencies.cdp]
+path = "../cdp"
+
+[features]
+default = []
+strict = ["clippy"]

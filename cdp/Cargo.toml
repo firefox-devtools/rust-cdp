@@ -1,0 +1,50 @@
+# Lines containing "build" are deleted during baking (see bake.sh).
+
+[package]
+name = "cdp"
+version = "0.1.0"
+authors = ["Michael Smith <michael@spinda.net>"]
+license-file = "LICENSE.md"
+readme = "README.md"
+keywords = ["chrome", "devtools", "protocol", "cdp", "chromium"]
+repository = "https://github.com/devtools-html/rust-cdp"
+homepage = "https://github.com/devtools-html/rust-cdp/tree/master/cdp"
+documentation = "https://docs.rs/cdp/0.1.0"
+description = """
+Chrome DevTools Protocol types and (de)serialization for Rust
+"""
+categories = ["network-programming"]
+build = "src/generate.rs"
+
+[badges]
+travis-ci = { repository = "devtools-html/rust-cdp" }
+appveyor = { repository = "spinda/rust-cdp" }
+
+[dependencies]
+serde = "1.0.8"
+serde_derive = "1.0.8"
+serde_json = "1.0.2"
+
+[dependencies.clippy]
+version = "*"
+optional = true
+
+[build-dependencies]
+Inflector = "0.10.1" #build
+lazy_static = "0.2.8" #build
+petgraph = "0.4.6" #build
+quote = "0.3.15" #build
+regex = "0.2.1" #build
+rustfmt = "0.9.0" #build
+serde_json = "1.0.2" #build
+
+[build-dependencies.cdp-definition]
+path = "../cdp-definition" #build
+
+[build-dependencies.clippy]
+version = "*" #build
+optional = true #build
+
+[features]
+default = []
+strict = ["clippy"]

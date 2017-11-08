@@ -7,7 +7,7 @@ fn_call_width = 99
 
 # format comments
 normalize_comments = true
-wrap_comments = true
+wrap_comments = false
 error_on_line_overflow_comments = false
 
 # order imports
