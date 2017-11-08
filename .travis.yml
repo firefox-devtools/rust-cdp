@@ -57,5 +57,5 @@ script:
       grep -rL 'This Source Code Form is subject to the terms of the Mozilla Public License' **/tests &&
       grep -rL 'This Source Code Form is subject to the terms of the Mozilla Public License' **.sh;
     fi
-  - if [ "$SCRIPTS" = true ]; then ./update_json.sh; fi
+  - if [ "$SCRIPTS" = true ]; then ./update-json.sh; fi
   - if [ "$SCRIPTS" = true ]; then ./bake.sh; fi
